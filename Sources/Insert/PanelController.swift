@@ -128,8 +128,8 @@ final class PanelController {
     }
 
     private func searchFieldEditorHasText() -> Bool {
-        guard let fieldEditor = panel.fieldEditor(false, for: nil) as? NSTextView else { return false }
-        return !fieldEditor.string.isEmpty
+        guard let fieldEditor = panel.firstResponder as? NSTextView else { return false }
+        return fieldEditor.isFieldEditor && !fieldEditor.string.isEmpty
     }
 
     private func handleShortcutRecordingEvent(_ event: NSEvent) {
@@ -171,13 +171,6 @@ final class InsertPanel: NSPanel {
         onEscape?()
     }
 
-    override func keyDown(with event: NSEvent) {
-        if let command = InsertKeyCommand(event: event), onKeyCommand?(command) == true {
-            return
-        }
-
-        super.keyDown(with: event)
-    }
 }
 
 enum InsertKeyCommand: Equatable {
