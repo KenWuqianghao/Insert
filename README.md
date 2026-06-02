@@ -2,6 +2,10 @@
 
 Insert is a minimal native macOS clipboard tray inspired by Paste. It keeps recent text clipboard entries, opens from the bottom of the active screen with a global hotkey, supports search, and includes toggles for hiding the Dock icon and opening at login.
 
+## Download
+
+Download the latest drag-to-install disk image from [GitHub Releases](https://github.com/KenWuqianghao/Insert/releases/latest) (`Insert-Installer.dmg`). Open the DMG and drag **Insert** into **Applications**.
+
 ## Build and Run
 
 ```sh
@@ -10,7 +14,7 @@ make run
 
 The app bundle is created at `build/Insert.app`.
 
-To create a drag-to-install disk image:
+To build a DMG locally (releases are built automatically on tagged versions):
 
 ```sh
 make dmg
