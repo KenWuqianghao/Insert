@@ -1,0 +1,7 @@
+.DS_Store
+build/
+Resources/AppIcon.icns
+Resources/AppIcon.iconset/
+DerivedData/
+*.xcuserdata/
+*.xcuserstate

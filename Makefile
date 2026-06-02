@@ -1,0 +1,51 @@
+APP_NAME := Insert
+BUNDLE_ID := com.local.Insert
+BUILD_DIR := build
+APP_BUNDLE := $(BUILD_DIR)/$(APP_NAME).app
+DMG_NAME := $(APP_NAME)-Installer.dmg
+DMG_PATH := $(BUILD_DIR)/$(DMG_NAME)
+DMG_STAGING := $(BUILD_DIR)/dmg
+MACOS_DIR := $(APP_BUNDLE)/Contents/MacOS
+RESOURCES_DIR := $(APP_BUNDLE)/Contents/Resources
+APP_ICON := Resources/AppIcon.icns
+ARCH := $(shell uname -m)
+SOURCES := $(shell find Sources/Insert -name '*.swift' | sort)
+
+.PHONY: build run dmg clean install
+
+build: $(APP_BUNDLE)
+
+$(APP_ICON): Tools/GenerateIcon.swift
+	swift Tools/GenerateIcon.swift
+
+$(APP_BUNDLE): $(SOURCES) Info.plist $(APP_ICON)
+	@mkdir -p "$(MACOS_DIR)" "$(RESOURCES_DIR)"
+	swiftc -O -parse-as-library -target $(ARCH)-apple-macosx14.0 \
+		$(SOURCES) \
+		-o "$(MACOS_DIR)/$(APP_NAME)" \
+		-framework AppKit \
+		-framework SwiftUI \
+		-framework Carbon \
+		-framework ServiceManagement
+	@cp Info.plist "$(APP_BUNDLE)/Contents/Info.plist"
+	@cp "$(APP_ICON)" "$(RESOURCES_DIR)/AppIcon.icns"
+	@touch "$(APP_BUNDLE)"
+
+run: build
+	open -n "$(APP_BUNDLE)"
+
+dmg: build
+	@rm -rf "$(DMG_STAGING)" "$(DMG_PATH)"
+	@mkdir -p "$(DMG_STAGING)"
+	@cp -R "$(APP_BUNDLE)" "$(DMG_STAGING)/"
+	@ln -s /Applications "$(DMG_STAGING)/Applications"
+	hdiutil create -volname "$(APP_NAME)" -srcfolder "$(DMG_STAGING)" -ov -format UDZO "$(DMG_PATH)"
+	@echo "Created $(DMG_PATH)"
+
+install: build
+	@rm -rf "/Applications/$(APP_NAME).app"
+	@cp -R "$(APP_BUNDLE)" /Applications/
+	@echo "Installed /Applications/$(APP_NAME).app"
+
+clean:
+	rm -rf "$(BUILD_DIR)"
