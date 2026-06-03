@@ -1,7 +1,10 @@
 .DS_Store
 build/
+windows/**/bin/
+windows/**/obj/
 Resources/AppIcon.icns
 Resources/AppIcon.iconset/
 DerivedData/
 *.xcuserdata/
 *.xcuserstate
+landing-page/

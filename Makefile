@@ -10,8 +10,9 @@ RESOURCES_DIR := $(APP_BUNDLE)/Contents/Resources
 APP_ICON := Resources/AppIcon.icns
 ARCH := $(shell uname -m)
 SOURCES := $(shell find Sources/Insert -name '*.swift' | sort)
+SIGN_IDENTITY ?= -
 
-.PHONY: build run dmg clean install
+.PHONY: build run sign dmg clean install marketing-assets
 
 build: $(APP_BUNDLE)
 
@@ -34,13 +35,25 @@ $(APP_BUNDLE): $(SOURCES) Info.plist $(APP_ICON)
 run: build
 	open -n "$(APP_BUNDLE)"
 
-dmg: build
+sign: build
+	xattr -cr "$(APP_BUNDLE)"
+	codesign --force --deep --options runtime --sign "$(SIGN_IDENTITY)" "$(APP_BUNDLE)"
+	codesign --verify --deep --strict --verbose=2 "$(APP_BUNDLE)"
+
+dmg: sign
 	@rm -rf "$(DMG_STAGING)" "$(DMG_PATH)"
 	@mkdir -p "$(DMG_STAGING)"
 	@cp -R "$(APP_BUNDLE)" "$(DMG_STAGING)/"
+	@xattr -cr "$(DMG_STAGING)/$(APP_NAME).app"
 	@ln -s /Applications "$(DMG_STAGING)/Applications"
 	hdiutil create -volname "$(APP_NAME)" -srcfolder "$(DMG_STAGING)" -ov -format UDZO "$(DMG_PATH)"
+	@xattr -cr "$(DMG_PATH)"
+	hdiutil verify "$(DMG_PATH)"
 	@echo "Created $(DMG_PATH)"
+
+marketing-assets:
+	@mkdir -p "$(BUILD_DIR)/ModuleCache"
+	CLANG_MODULE_CACHE_PATH="$(BUILD_DIR)/ModuleCache" swift Tools/GenerateMarketingAssets.swift
 
 install: build
 	@rm -rf "/Applications/$(APP_NAME).app"
