@@ -347,7 +347,16 @@ sealed record ClipboardSnapshot(
     }
 
     private static bool ShouldSkipGenericFormat(string format)
-        => format is DataFormats.Text or DataFormats.UnicodeText or DataFormats.Html or DataFormats.Rtf or DataFormats.Bitmap or DataFormats.Dib or DataFormats.FileDrop;
+        => new[]
+        {
+            DataFormats.Text,
+            DataFormats.UnicodeText,
+            DataFormats.Html,
+            DataFormats.Rtf,
+            DataFormats.Bitmap,
+            DataFormats.Dib,
+            DataFormats.FileDrop
+        }.Contains(format, StringComparer.Ordinal);
 
     private static ClipboardKind GuessKind(string format, ClipboardKind current)
     {
