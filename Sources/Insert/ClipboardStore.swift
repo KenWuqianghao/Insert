@@ -284,14 +284,6 @@ private struct ClipboardDescriptor {
             return
         }
 
-        if types.contains(.html), let html = Self.string(for: .html, in: allRepresentations) {
-            kind = .html
-            title = "HTML"
-            preview = Self.strippedHTML(html)
-            searchText = "\(preview) \(html)"
-            return
-        }
-
         if types.contains(.color) {
             kind = .color
             title = "Color"
@@ -305,6 +297,14 @@ private struct ClipboardDescriptor {
             title = ClipboardItem.title(forText: text)
             preview = text.trimmingCharacters(in: .whitespacesAndNewlines)
             searchText = text
+            return
+        }
+
+        if types.contains(.html), let html = Self.string(for: .html, in: allRepresentations) {
+            kind = .html
+            title = "HTML"
+            preview = Self.strippedHTML(html)
+            searchText = "\(preview) \(html)"
             return
         }
 

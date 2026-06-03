@@ -191,23 +191,6 @@ sealed record ClipboardSnapshot(
             );
         }
 
-        if (Clipboard.ContainsData(DataFormats.Html))
-        {
-            var html = Clipboard.GetData(DataFormats.Html)?.ToString() ?? "";
-            if (!string.IsNullOrWhiteSpace(html))
-            {
-                var preview = HtmlStripper.Strip(html);
-                return new ClipboardSnapshot(
-                    ClipboardKind.Html,
-                    "HTML",
-                    preview,
-                    html,
-                    new ClipboardPayload(null, html, null, null, null, null, null, null, null, null, null),
-                    "Clipboard"
-                );
-            }
-        }
-
         if (Clipboard.ContainsData(DataFormats.Rtf))
         {
             var rtf = Clipboard.GetData(DataFormats.Rtf)?.ToString() ?? "";
@@ -248,6 +231,23 @@ sealed record ClipboardSnapshot(
                     text.Trim(),
                     text,
                     new ClipboardPayload(text, null, null, null, null, null, null, null, null, null, null),
+                    "Clipboard"
+                );
+            }
+        }
+
+        if (Clipboard.ContainsData(DataFormats.Html))
+        {
+            var html = Clipboard.GetData(DataFormats.Html)?.ToString() ?? "";
+            if (!string.IsNullOrWhiteSpace(html))
+            {
+                var preview = HtmlStripper.Strip(html);
+                return new ClipboardSnapshot(
+                    ClipboardKind.Html,
+                    "HTML",
+                    preview,
+                    html,
+                    new ClipboardPayload(null, html, null, null, null, null, null, null, null, null, null),
                     "Clipboard"
                 );
             }
