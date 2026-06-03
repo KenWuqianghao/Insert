@@ -4,6 +4,8 @@
 
 **Insert** is a minimal native clipboard tray for macOS. It stays out of the way until your shortcut is pressed, then lifts from the bottom of the screen with your recent clipboard items ready to search, select, copy, or delete.
 
+Product page: https://insert-app.vercel.app
+
 The app is intentionally small: no account, no cloud sync, no oversized window. Just a fast tray, cards, search, keyboard navigation, persistent history, and a few practical settings.
 
 ## Highlights
@@ -82,7 +84,11 @@ make dmg
 
 ## Windows
 
-Windows work lives under [`windows/Insert.Windows.sln`](./windows/Insert.Windows.sln) and [`windows/Insert.Windows`](./windows/Insert.Windows). It is a native WinForms port with the same clipboard tray, search, hotkey, and persistent history model.
+The Windows-specific repo is available at:
+
+https://github.com/KenWuqianghao/insert-windows
+
+The mirrored source under [`windows/Insert.Windows.sln`](./windows/Insert.Windows.sln) and [`windows/Insert.Windows`](./windows/Insert.Windows) is a native WinForms port with the same clipboard tray, search, hotkey, and persistent history model.
 
 Build it on Windows with the .NET 8 Windows Desktop workload installed:
 

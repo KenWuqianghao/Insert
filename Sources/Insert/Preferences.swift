@@ -6,6 +6,7 @@ final class Preferences: ObservableObject {
     @Published var hideDockIcon: Bool {
         didSet {
             UserDefaults.standard.set(hideDockIcon, forKey: Keys.hideDockIcon)
+            UserDefaults.standard.synchronize()
             applyDockPolicy()
         }
     }
@@ -39,6 +40,10 @@ final class Preferences: ObservableObject {
 
     func applyDockPolicy() {
         NSApp.setActivationPolicy(hideDockIcon ? .accessory : .regular)
+
+        DispatchQueue.main.async {
+            NSApp.setActivationPolicy(self.hideDockIcon ? .accessory : .regular)
+        }
     }
 
     private func updateLaunchAtLogin() {

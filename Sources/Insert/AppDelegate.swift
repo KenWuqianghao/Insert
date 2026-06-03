@@ -12,7 +12,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
         preferences.applyDockPolicy()
 
         clipboardStore.start()
@@ -30,6 +29,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.registerHotKey()
             }
             .store(in: &cancellables)
+
+        observeDockPolicyRestoreEvents()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -67,5 +68,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotKeyManager.register(shortcut: preferences.hotKeyShortcut) { [weak self] in
             self?.panelController?.toggle()
         }
+    }
+
+    private func observeDockPolicyRestoreEvents() {
+        NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
+            .sink { [weak self] _ in
+                self?.preferences.applyDockPolicy()
+            }
+            .store(in: &cancellables)
+
+        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)
+            .sink { [weak self] _ in
+                self?.preferences.applyDockPolicy()
+            }
+            .store(in: &cancellables)
     }
 }
