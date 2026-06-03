@@ -9,7 +9,7 @@ namespace Insert.Windows;
 
 sealed class ClipboardHistory : IDisposable
 {
-    private readonly Timer _timer;
+    private readonly System.Windows.Forms.Timer _timer;
     private readonly string _storagePath;
     private readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
     private ClipboardSnapshot? _lastSnapshot;
@@ -26,7 +26,7 @@ sealed class ClipboardHistory : IDisposable
         Directory.CreateDirectory(dir);
         _storagePath = Path.Combine(dir, "ClipboardHistory.json");
         _entries = Load();
-        _timer = new Timer { Interval = 500 };
+        _timer = new System.Windows.Forms.Timer { Interval = 500 };
         _timer.Tick += (_, _) => PollClipboard();
         _timer.Start();
     }
