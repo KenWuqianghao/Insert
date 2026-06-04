@@ -9,6 +9,7 @@ struct RootView: View {
 
     @State private var searchText = ""
     @State private var selectedItemID: ClipboardItem.ID?
+    @State private var deletingItemID: ClipboardItem.ID?
     @State private var isRecordingShortcut = false
     @FocusState private var searchFocused: Bool
 
@@ -32,25 +33,39 @@ struct RootView: View {
                 if filteredItems.isEmpty {
                     EmptyClipboardView(hasSearch: !searchText.isEmpty)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .transition(.scale(scale: 0.98).combined(with: .opacity))
                 } else {
                     ScrollViewReader { proxy in
                         ScrollView(.horizontal, showsIndicators: false) {
                             LazyHStack(spacing: 12) {
                                 ForEach(filteredItems) { item in
-                                    ClipboardCard(item: item, isSelected: item.id == selectedItemID)
+                                    ClipboardCard(
+                                        item: item,
+                                        isSelected: item.id == selectedItemID,
+                                        isDeleting: item.id == deletingItemID
+                                    )
                                         .id(item.id)
+                                        .transition(.asymmetric(
+                                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                                            removal: .move(edge: .leading).combined(with: .opacity)
+                                        ))
                                         .onTapGesture {
-                                            selectedItemID = item.id
+                                            withAnimation(cardAnimation) {
+                                                selectedItemID = item.id
+                                            }
                                             onSelect(item)
                                         }
                                 }
                             }
                             .padding(.horizontal, 22)
                             .padding(.bottom, 20)
+                            .animation(cardAnimation, value: filteredItems.map(\.id))
+                            .animation(cardAnimation, value: selectedItemID)
+                            .animation(cardAnimation, value: deletingItemID)
                         }
                         .onChange(of: selectedItemID) { _, newValue in
                             guard let newValue else { return }
-                            withAnimation(.easeOut(duration: 0.16)) {
+                            withAnimation(cardAnimation) {
                                 proxy.scrollTo(newValue, anchor: .center)
                             }
                         }
@@ -60,8 +75,11 @@ struct RootView: View {
 
             if isRecordingShortcut {
                 ShortcutRecorderOverlay(currentShortcut: preferences.hotKeyShortcut.displayName)
+                    .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
         }
+        .animation(cardAnimation, value: filteredItems.isEmpty)
+        .animation(cardAnimation, value: isRecordingShortcut)
         .padding(.top, 18)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(PanelBackground())
@@ -175,12 +193,16 @@ struct RootView: View {
     }
 
     private func selectMostRecentItem() {
-        selectedItemID = filteredItems.first?.id
+        withAnimation(cardAnimation) {
+            selectedItemID = filteredItems.first?.id
+        }
     }
 
     private func keepSelectionValid() {
         guard !filteredItems.isEmpty else {
-            selectedItemID = nil
+            withAnimation(cardAnimation) {
+                selectedItemID = nil
+            }
             return
         }
 
@@ -188,7 +210,9 @@ struct RootView: View {
             return
         }
 
-        selectMostRecentItem()
+        withAnimation(cardAnimation) {
+            selectMostRecentItem()
+        }
     }
 
     private func handleKeyCommand(_ command: InsertKeyCommand) {
@@ -215,7 +239,9 @@ struct RootView: View {
         } ?? 0
 
         let nextIndex = min(max(currentIndex + offset, 0), filteredItems.count - 1)
-        selectedItemID = filteredItems[nextIndex].id
+        withAnimation(cardAnimation) {
+            selectedItemID = filteredItems[nextIndex].id
+        }
     }
 
     private func copySelectedItem() {
@@ -230,6 +256,7 @@ struct RootView: View {
     }
 
     private func deleteSelectedItem() {
+        guard deletingItemID == nil else { return }
         guard
             let selectedItemID,
             let selectedIndex = filteredItems.firstIndex(where: { $0.id == selectedItemID })
@@ -240,14 +267,23 @@ struct RootView: View {
         let selectedItem = filteredItems[selectedIndex]
         let remainingItems = filteredItems.filter { $0.id != selectedItem.id }
 
-        if remainingItems.isEmpty {
-            self.selectedItemID = nil
-        } else {
-            let nextIndex = min(selectedIndex, remainingItems.count - 1)
-            self.selectedItemID = remainingItems[nextIndex].id
+        withAnimation(cardAnimation) {
+            deletingItemID = selectedItem.id
+
+            if remainingItems.isEmpty {
+                self.selectedItemID = nil
+            } else {
+                let nextIndex = min(selectedIndex, remainingItems.count - 1)
+                self.selectedItemID = remainingItems[nextIndex].id
+            }
         }
 
-        clipboardStore.delete(selectedItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+            withAnimation(cardAnimation) {
+                clipboardStore.delete(selectedItem)
+                deletingItemID = nil
+            }
+        }
     }
 
     private func setShortcutRecording(_ isRecording: Bool) {
@@ -260,6 +296,7 @@ struct RootView: View {
 private struct ClipboardCard: View {
     let item: ClipboardItem
     let isSelected: Bool
+    let isDeleting: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -318,7 +355,13 @@ private struct ClipboardCard: View {
                 .stroke(isSelected ? Color.accentColor.opacity(0.92) : .white.opacity(0.16), lineWidth: isSelected ? 3 : 1)
         )
         .shadow(color: isSelected ? Color.accentColor.opacity(0.36) : .clear, radius: 14, y: 0)
+        .scaleEffect(isDeleting ? 0.94 : (isSelected ? 1.02 : 1))
+        .offset(x: isDeleting ? -26 : 0, y: isDeleting ? 8 : 0)
+        .opacity(isDeleting ? 0 : 1)
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .animation(cardAnimation, value: isSelected)
+        .animation(cardAnimation, value: isDeleting)
+        .allowsHitTesting(!isDeleting)
     }
 
     private var cardBackground: some ShapeStyle {
@@ -331,6 +374,10 @@ private struct ClipboardCard: View {
             endPoint: .bottomTrailing
         )
     }
+}
+
+private var cardAnimation: Animation {
+    .spring(response: 0.24, dampingFraction: 0.84, blendDuration: 0.08)
 }
 
 private struct EmptyClipboardView: View {
