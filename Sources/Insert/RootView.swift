@@ -9,7 +9,9 @@ struct RootView: View {
 
     @State private var searchText = ""
     @State private var selectedItemID: ClipboardItem.ID?
-    @State private var deletingItemID: ClipboardItem.ID?
+    @State private var selectedItemIDs: Set<ClipboardItem.ID> = []
+    @State private var selectionAnchorItemID: ClipboardItem.ID?
+    @State private var deletingItemIDs: Set<ClipboardItem.ID> = []
     @State private var isRecordingShortcut = false
     @FocusState private var searchFocused: Bool
 
@@ -41,8 +43,9 @@ struct RootView: View {
                                 ForEach(filteredItems) { item in
                                     ClipboardCard(
                                         item: item,
-                                        isSelected: item.id == selectedItemID,
-                                        isDeleting: item.id == deletingItemID
+                                        isSelected: selectedItemIDs.contains(item.id),
+                                        isPrimarySelection: item.id == selectedItemID,
+                                        isDeleting: deletingItemIDs.contains(item.id)
                                     )
                                         .id(item.id)
                                         .transition(.asymmetric(
@@ -50,10 +53,9 @@ struct RootView: View {
                                             removal: .move(edge: .leading).combined(with: .opacity)
                                         ))
                                         .onTapGesture {
-                                            withAnimation(cardAnimation) {
-                                                selectedItemID = item.id
+                                            if selectItemFromClick(item) {
+                                                onSelect(item)
                                             }
-                                            onSelect(item)
                                         }
                                 }
                             }
@@ -61,7 +63,8 @@ struct RootView: View {
                             .padding(.bottom, 20)
                             .animation(cardAnimation, value: filteredItems.map(\.id))
                             .animation(cardAnimation, value: selectedItemID)
-                            .animation(cardAnimation, value: deletingItemID)
+                            .animation(cardAnimation, value: selectedItemIDs)
+                            .animation(cardAnimation, value: deletingItemIDs)
                         }
                         .onChange(of: selectedItemID) { _, newValue in
                             guard let newValue else { return }
@@ -194,25 +197,30 @@ struct RootView: View {
 
     private func selectMostRecentItem() {
         withAnimation(cardAnimation) {
-            selectedItemID = filteredItems.first?.id
+            selectOnly(filteredItems.first?.id)
         }
     }
 
     private func keepSelectionValid() {
         guard !filteredItems.isEmpty else {
             withAnimation(cardAnimation) {
-                selectedItemID = nil
+                clearSelection()
             }
             return
         }
 
+        selectedItemIDs = Set(selectedItemIDs.filter { id in
+            filteredItems.contains { $0.id == id }
+        })
+
         if let selectedItemID, filteredItems.contains(where: { $0.id == selectedItemID }) {
+            if selectedItemIDs.isEmpty {
+                selectedItemIDs = [selectedItemID]
+            }
             return
         }
 
-        withAnimation(cardAnimation) {
-            selectMostRecentItem()
-        }
+        selectMostRecentItem()
     }
 
     private func handleKeyCommand(_ command: InsertKeyCommand) {
@@ -224,6 +232,12 @@ struct RootView: View {
             moveSelection(by: -1)
         case .moveNext:
             moveSelection(by: 1)
+        case .extendPrevious:
+            extendSelection(by: -1)
+        case .extendNext:
+            extendSelection(by: 1)
+        case .selectAll:
+            selectAllItems()
         case .copySelection:
             copySelectedItem()
         case .deleteSelection:
@@ -240,7 +254,28 @@ struct RootView: View {
 
         let nextIndex = min(max(currentIndex + offset, 0), filteredItems.count - 1)
         withAnimation(cardAnimation) {
-            selectedItemID = filteredItems[nextIndex].id
+            selectOnly(filteredItems[nextIndex].id)
+        }
+    }
+
+    private func extendSelection(by offset: Int) {
+        guard !filteredItems.isEmpty else { return }
+
+        let currentIndex = selectedItemID.flatMap { id in
+            filteredItems.firstIndex { $0.id == id }
+        } ?? 0
+
+        let nextIndex = min(max(currentIndex + offset, 0), filteredItems.count - 1)
+        withAnimation(cardAnimation) {
+            selectRange(to: filteredItems[nextIndex].id)
+        }
+    }
+
+    private func selectAllItems() {
+        withAnimation(cardAnimation) {
+            selectedItemIDs = Set(filteredItems.map(\.id))
+            selectedItemID = filteredItems.first?.id
+            selectionAnchorItemID = filteredItems.first?.id
         }
     }
 
@@ -256,7 +291,7 @@ struct RootView: View {
     }
 
     private func deleteSelectedItem() {
-        guard deletingItemID == nil else { return }
+        guard deletingItemIDs.isEmpty else { return }
         guard
             let selectedItemID,
             let selectedIndex = filteredItems.firstIndex(where: { $0.id == selectedItemID })
@@ -264,26 +299,99 @@ struct RootView: View {
             return
         }
 
-        let selectedItem = filteredItems[selectedIndex]
-        let remainingItems = filteredItems.filter { $0.id != selectedItem.id }
+        let selectedIDs = selectedItemIDs.isEmpty ? [selectedItemID] : selectedItemIDs
+        let selectedItems = filteredItems.filter { selectedIDs.contains($0.id) }
+        guard !selectedItems.isEmpty else { return }
+
+        let selectedIndexes = selectedItems.compactMap { item in
+            filteredItems.firstIndex { $0.id == item.id }
+        }
+        let nextSelectionIndex = selectedIndexes.min() ?? selectedIndex
+        let remainingItems = filteredItems.filter { !selectedIDs.contains($0.id) }
 
         withAnimation(cardAnimation) {
-            deletingItemID = selectedItem.id
+            deletingItemIDs = selectedIDs
 
             if remainingItems.isEmpty {
-                self.selectedItemID = nil
+                clearSelection()
             } else {
-                let nextIndex = min(selectedIndex, remainingItems.count - 1)
-                self.selectedItemID = remainingItems[nextIndex].id
+                let nextIndex = min(nextSelectionIndex, remainingItems.count - 1)
+                selectOnly(remainingItems[nextIndex].id)
             }
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
             withAnimation(cardAnimation) {
-                clipboardStore.delete(selectedItem)
-                deletingItemID = nil
+                clipboardStore.delete(selectedItems)
+                deletingItemIDs = []
             }
         }
+    }
+
+    private func selectItemFromClick(_ item: ClipboardItem) -> Bool {
+        let modifiers = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        withAnimation(cardAnimation) {
+            if modifiers.contains(.shift) {
+                selectRange(to: item.id)
+            } else if modifiers.contains(.command) {
+                toggleSelection(of: item.id)
+            } else {
+                selectOnly(item.id)
+            }
+        }
+
+        return !modifiers.contains(.shift) && !modifiers.contains(.command)
+    }
+
+    private func selectOnly(_ itemID: ClipboardItem.ID?) {
+        selectedItemID = itemID
+        selectionAnchorItemID = itemID
+        if let itemID {
+            selectedItemIDs = [itemID]
+        } else {
+            selectedItemIDs = []
+        }
+    }
+
+    private func clearSelection() {
+        selectedItemID = nil
+        selectionAnchorItemID = nil
+        selectedItemIDs = []
+    }
+
+    private func toggleSelection(of itemID: ClipboardItem.ID) {
+        if selectedItemIDs.contains(itemID) {
+            selectedItemIDs.remove(itemID)
+            if selectedItemID == itemID {
+                selectedItemID = filteredItems.first { selectedItemIDs.contains($0.id) }?.id
+            }
+            selectionAnchorItemID = selectedItemID
+        } else {
+            selectedItemIDs.insert(itemID)
+            selectedItemID = itemID
+            selectionAnchorItemID = selectionAnchorItemID ?? itemID
+        }
+    }
+
+    private func selectRange(to itemID: ClipboardItem.ID) {
+        guard
+            let targetIndex = filteredItems.firstIndex(where: { $0.id == itemID })
+        else {
+            selectOnly(itemID)
+            return
+        }
+
+        let anchorID = selectionAnchorItemID ?? selectedItemID ?? itemID
+        guard let anchorIndex = filteredItems.firstIndex(where: { $0.id == anchorID }) else {
+            selectOnly(itemID)
+            return
+        }
+
+        let bounds = min(anchorIndex, targetIndex)...max(anchorIndex, targetIndex)
+        selectedItemIDs = Set(filteredItems[bounds].map(\.id))
+        selectedItemID = itemID
+        selectionAnchorItemID = anchorID
     }
 
     private func setShortcutRecording(_ isRecording: Bool) {
@@ -296,6 +404,7 @@ struct RootView: View {
 private struct ClipboardCard: View {
     let item: ClipboardItem
     let isSelected: Bool
+    let isPrimarySelection: Bool
     let isDeleting: Bool
 
     var body: some View {
@@ -308,10 +417,12 @@ private struct ClipboardCard: View {
 
                 Spacer(minLength: 8)
 
-                Text(item.createdAt, style: .relative)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
+                TimelineView(.periodic(from: .now, by: 60)) { context in
+                    Text(item.createdAt.coarseRelativeDescription(now: context.date))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
             }
 
             Text(item.title)
@@ -352,14 +463,15 @@ private struct ClipboardCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(isSelected ? Color.accentColor.opacity(0.92) : .white.opacity(0.16), lineWidth: isSelected ? 3 : 1)
+                .stroke(isSelected ? Color.accentColor.opacity(0.92) : .white.opacity(0.16), lineWidth: isPrimarySelection ? 3 : (isSelected ? 2 : 1))
         )
-        .shadow(color: isSelected ? Color.accentColor.opacity(0.36) : .clear, radius: 14, y: 0)
+        .shadow(color: isSelected ? Color.accentColor.opacity(0.34) : .clear, radius: 14, y: 0)
         .scaleEffect(isDeleting ? 0.94 : (isSelected ? 1.02 : 1))
         .offset(x: isDeleting ? -26 : 0, y: isDeleting ? 8 : 0)
         .opacity(isDeleting ? 0 : 1)
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .animation(cardAnimation, value: isSelected)
+        .animation(cardAnimation, value: isPrimarySelection)
         .animation(cardAnimation, value: isDeleting)
         .allowsHitTesting(!isDeleting)
     }
@@ -378,6 +490,44 @@ private struct ClipboardCard: View {
 
 private var cardAnimation: Animation {
     .spring(response: 0.24, dampingFraction: 0.84, blendDuration: 0.08)
+}
+
+private extension Date {
+    func coarseRelativeDescription(now: Date) -> String {
+        let seconds = max(0, Int(now.timeIntervalSince(self)))
+
+        if seconds < 60 {
+            return "Just now"
+        }
+
+        let minutes = seconds / 60
+        if minutes < 60 {
+            return "\(minutes) \(minutes == 1 ? "min" : "min")"
+        }
+
+        let hours = minutes / 60
+        if hours < 24 {
+            return "\(hours) \(hours == 1 ? "hr" : "hr")"
+        }
+
+        let days = hours / 24
+        if days < 7 {
+            return "\(days) \(days == 1 ? "day" : "days")"
+        }
+
+        let weeks = days / 7
+        if weeks < 5 {
+            return "\(weeks) \(weeks == 1 ? "week" : "weeks")"
+        }
+
+        let months = days / 30
+        if months < 12 {
+            return "\(months) \(months == 1 ? "mo" : "mo")"
+        }
+
+        let years = days / 365
+        return "\(years) \(years == 1 ? "yr" : "yr")"
+    }
 }
 
 private struct EmptyClipboardView: View {

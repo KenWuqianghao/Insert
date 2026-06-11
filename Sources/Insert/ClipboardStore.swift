@@ -62,6 +62,11 @@ final class ClipboardStore: ObservableObject {
         items.removeAll { $0.id == item.id }
     }
 
+    func delete(_ deletedItems: [ClipboardItem]) {
+        let deletedIDs = Set(deletedItems.map(\.id))
+        items.removeAll { deletedIDs.contains($0.id) }
+    }
+
     private func readCurrentPasteboardIfNeeded(force: Bool) {
         let pasteboard = NSPasteboard.general
         guard force || pasteboard.changeCount != changeCount else { return }

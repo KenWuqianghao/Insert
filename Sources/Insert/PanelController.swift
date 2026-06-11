@@ -183,14 +183,24 @@ final class InsertPanel: NSPanel {
 enum InsertKeyCommand: Equatable {
     case movePrevious
     case moveNext
+    case extendPrevious
+    case extendNext
+    case selectAll
     case copySelection
     case deleteSelection
 
     init?(event: NSEvent) {
-        let commandPressed = event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command)
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let commandPressed = modifiers.contains(.command)
+        let shiftPressed = modifiers.contains(.shift)
 
         if commandPressed, event.charactersIgnoringModifiers?.lowercased() == "c" {
             self = .copySelection
+            return
+        }
+
+        if commandPressed, event.charactersIgnoringModifiers?.lowercased() == "a" {
+            self = .selectAll
             return
         }
 
@@ -198,9 +208,9 @@ enum InsertKeyCommand: Equatable {
 
         switch Int(event.keyCode) {
         case kVK_LeftArrow, kVK_UpArrow:
-            self = .movePrevious
+            self = shiftPressed ? .extendPrevious : .movePrevious
         case kVK_RightArrow, kVK_DownArrow:
-            self = .moveNext
+            self = shiftPressed ? .extendNext : .moveNext
         case kVK_Return, kVK_ANSI_KeypadEnter:
             self = .copySelection
         case kVK_Delete, kVK_ForwardDelete:
