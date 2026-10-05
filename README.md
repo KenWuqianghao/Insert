@@ -2,25 +2,26 @@
 
 ![Insert tray preview](docs/assets/insert-hero.png)
 
-**Insert** is a minimal native clipboard tray for macOS. It stays out of the way until your shortcut is pressed, then lifts from the bottom of the screen with your recent clipboard items ready to search, select, copy, or delete.
+**Insert** is a native clipboard tray for macOS. Press the shortcut and the tray comes up from the bottom of the screen. Select a clip and Insert pastes it into the app that you use.
 
 Product page: https://insert-app.vercel.app
 
-The app is intentionally small: no account, no cloud sync, no oversized window. Just a fast tray, cards, search, keyboard navigation, persistent history, and a few practical settings.
+Insert has no account and no cloud sync. All data stays on your Mac.
 
 ## Highlights
 
-- Bottom-of-screen clipboard tray inspired by Paste.
-- Recent item is selected automatically when the tray opens.
-- Search across saved clipboard history.
-- Navigate cards with the arrow keys.
-- Press `Enter` or `Command+C` to copy the selected item.
-- Press `Backspace` or `Delete` to remove the selected item.
-- Customizable global shortcut.
-- Optional Dock icon hiding.
-- Optional launch at login.
-- Persistent clipboard history across restarts.
-- Supports common pasteboard payloads: text, URLs, files, images, PDFs, rich text, HTML, colors, and typical media UTIs.
+- A full-width tray at the bottom of the screen, inspired by Paste.
+- Cards show the source app, the type, the time, and a preview of the content.
+- Press `Enter` to paste the selected clip into the active app.
+- Press `Shift+Enter` to paste the clip as plain text.
+- Type to search. Use the filter to show one type of clip.
+- Pinboards keep clips that you use frequently. The history limit does not delete pinned clips.
+- Press `Space` to see a large preview of a clip.
+- Hold `Command` to show the numbers 1 to 9 on the cards. Press `Command+1` to `Command+9` to paste that card.
+- Insert skips items that an app marks as concealed or transient, for example passwords from a password manager.
+- You can pause capture, and you can ignore the apps that you select.
+- The Settings window has the global shortcut, the Dock icon, launch at login, direct paste, and the history limit.
+- Insert stores text, links, files, images, PDFs, rich text, colors, and common media types.
 
 ![Insert tray screenshot](docs/assets/insert-tray.png)
 
@@ -54,13 +55,34 @@ make dmg SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
 
 | Action | Shortcut |
 | --- | --- |
-| Open Insert | Custom global shortcut, default `Command+Shift+V` |
-| Move selection | Arrow keys |
-| Copy selected item | `Enter` or `Command+C` |
-| Delete selected item | `Backspace` or `Delete` |
-| Search | Type in the tray search field |
+| Open or close Insert | Global shortcut, default `Command+Shift+V` |
+| Move the selection | Arrow keys |
+| Extend the selection | `Shift` + arrow keys |
+| Select all clips | `Command+A` |
+| Paste the selected clip | `Enter` or double-click |
+| Paste as plain text | `Shift+Enter` |
+| Copy without paste | `Command+C` |
+| Paste card 1 to 9 | `Command+1` to `Command+9` |
+| Preview | `Space` (when the search field is empty) |
+| Delete the selection | `Backspace` or `Delete` (when the search field is empty), or `Command+Backspace` |
+| Go to the next or previous pinboard | `Tab` / `Shift+Tab`, or `Command+]` / `Command+[` |
+| Search | Type in the tray |
+| Close the preview, clear the search, or close the tray | `Esc` |
+| Open Settings | `Command+,` |
 
-Use the keyboard button or settings menu in the tray to record a new global shortcut. Use the settings menu to toggle Dock visibility and launch at login.
+Right-click a card to pin, rename, preview, or delete the clip. Right-click a pinboard tab to rename it, change its color, or delete it.
+
+## Accessibility Permission
+
+Insert pastes with a simulated `Command+V`. macOS permits this only for apps that have the Accessibility permission.
+
+1. Open Insert. If the permission is missing, the tray shows a notice.
+2. Click **Allow…** in the notice.
+3. Turn on **Insert** in System Settings > Privacy & Security > Accessibility.
+
+Without the permission, Insert copies the clip and you press `Command+V`. To use copy only, turn off **Paste directly into the active app** in Settings.
+
+A local build has an ad hoc signature. macOS can ask for the permission again after each new build.
 
 ## Build From Source
 
@@ -69,6 +91,14 @@ make run
 ```
 
 The app bundle is created at `build/Insert.app`.
+
+To build a second copy with its own bundle id, storage folder, and settings:
+
+```sh
+make dev
+```
+
+This creates `build/InsertDev.app`. Use it to test a build while an installed Insert runs.
 
 To generate the marketing screenshots used in this README:
 
@@ -98,10 +128,17 @@ dotnet build windows/Insert.Windows.sln
 
 ## Storage
 
-Text clipboard history is saved locally at:
+Insert keeps its data in a folder that has the name of the bundle id:
 
 ```sh
-~/Library/Application Support/Insert/ClipboardHistory.json
+~/Library/Application Support/com.local.Insert/
+├── index.json        # clip metadata and pinboards
+├── payloads/         # one file for each clip, with the full pasteboard content
+└── thumbnails/       # one PNG for each image clip
 ```
+
+Insert does not store an item that is larger than 50 MB.
+
+Version 0.2 does not read the history from version 0.1. The old file `~/Library/Application Support/Insert/ClipboardHistory.json` stays on disk. Delete it if you do not need it.
 
 Windows startup is stored in the current user's `Run` registry key and is toggled from the tray menu.

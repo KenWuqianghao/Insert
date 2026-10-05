@@ -2,6 +2,7 @@ APP_NAME := Insert
 BUNDLE_ID := com.local.Insert
 BUILD_DIR := build
 APP_BUNDLE := $(BUILD_DIR)/$(APP_NAME).app
+DEV_BUNDLE := $(BUILD_DIR)/$(APP_NAME)Dev.app
 DMG_NAME := $(APP_NAME)-Installer.dmg
 DMG_PATH := $(BUILD_DIR)/$(DMG_NAME)
 DMG_STAGING := $(BUILD_DIR)/dmg
@@ -12,7 +13,7 @@ ARCH := $(shell uname -m)
 SOURCES := $(shell find Sources/Insert -name '*.swift' | sort)
 SIGN_IDENTITY ?= -
 
-.PHONY: build run sign dmg clean install marketing-assets
+.PHONY: build dev run sign dmg clean install marketing-assets
 
 build: $(APP_BUNDLE)
 
@@ -27,10 +28,22 @@ $(APP_BUNDLE): $(SOURCES) Info.plist $(APP_ICON)
 		-framework AppKit \
 		-framework SwiftUI \
 		-framework Carbon \
-		-framework ServiceManagement
+		-framework ServiceManagement \
+		-framework ApplicationServices \
+		-framework CryptoKit \
+		-framework ImageIO \
+		-framework UniformTypeIdentifiers
 	@cp Info.plist "$(APP_BUNDLE)/Contents/Info.plist"
 	@cp "$(APP_ICON)" "$(RESOURCES_DIR)/AppIcon.icns"
 	@touch "$(APP_BUNDLE)"
+
+# A copy with its own bundle id. Its storage folder and defaults are separate from an installed Insert.
+dev: build
+	@rm -rf "$(DEV_BUNDLE)"
+	@cp -R "$(APP_BUNDLE)" "$(DEV_BUNDLE)"
+	@/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $(BUNDLE_ID).dev" "$(DEV_BUNDLE)/Contents/Info.plist"
+	@codesign --force --sign - "$(DEV_BUNDLE)"
+	@echo "Created $(DEV_BUNDLE) ($(BUNDLE_ID).dev)"
 
 run: build
 	open -n "$(APP_BUNDLE)"
