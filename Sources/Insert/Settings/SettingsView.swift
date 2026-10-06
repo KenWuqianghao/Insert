@@ -4,10 +4,43 @@ import Carbon
 import SwiftUI
 import UniformTypeIdentifiers
 
+enum SettingsPane: String, CaseIterable {
+    case general
+    case privacy
+
+    var title: String {
+        switch self {
+        case .general:
+            return "General"
+        case .privacy:
+            return "Privacy"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .general:
+            return "gearshape"
+        case .privacy:
+            return "hand.raised"
+        }
+    }
+
+    var toolbarIdentifier: NSToolbarItem.Identifier {
+        NSToolbarItem.Identifier(rawValue)
+    }
+}
+
 @MainActor
-final class SettingsWindowController {
+final class SettingsSelection: ObservableObject {
+    @Published var pane = SettingsPane.general
+}
+
+@MainActor
+final class SettingsWindowController: NSObject, NSToolbarDelegate {
     private let preferences: Preferences
     private let actions: SettingsView.Actions
+    private let selection = SettingsSelection()
     private var window: NSWindow?
 
     init(preferences: Preferences, actions: SettingsView.Actions) {
@@ -25,14 +58,60 @@ final class SettingsWindowController {
     }
 
     private func makeWindow() -> NSWindow {
-        let window = NSWindow(contentViewController: NSHostingController(
-            rootView: SettingsView(preferences: preferences, actions: actions)
-        ))
-        window.title = "Insert Settings"
-        window.styleMask = [.titled, .closable]
+        // The hosting view sizes the window, so the window follows the height of the selected pane.
+        let window = NSWindow(contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: true)
+        window.contentView = NSHostingView(
+            rootView: SettingsView(selection: selection, preferences: preferences, actions: actions)
+        )
         window.isReleasedWhenClosed = false
+        window.toolbarStyle = .preference
+
+        let toolbar = NSToolbar(identifier: "InsertSettings")
+        toolbar.delegate = self
+        toolbar.displayMode = .iconAndLabel
+        toolbar.allowsUserCustomization = false
+        window.toolbar = toolbar
+
+        select(selection.pane, in: window)
         window.center()
         return window
+    }
+
+    private func select(_ pane: SettingsPane, in window: NSWindow) {
+        selection.pane = pane
+        window.title = pane.title
+        window.toolbar?.selectedItemIdentifier = pane.toolbarIdentifier
+    }
+
+    @objc private func selectPane(_ sender: NSToolbarItem) {
+        guard let window, let pane = SettingsPane(rawValue: sender.itemIdentifier.rawValue) else { return }
+        select(pane, in: window)
+    }
+
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        SettingsPane.allCases.map(\.toolbarIdentifier)
+    }
+
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        SettingsPane.allCases.map(\.toolbarIdentifier)
+    }
+
+    func toolbarSelectableItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        SettingsPane.allCases.map(\.toolbarIdentifier)
+    }
+
+    func toolbar(
+        _ toolbar: NSToolbar,
+        itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
+        willBeInsertedIntoToolbar flag: Bool
+    ) -> NSToolbarItem? {
+        guard let pane = SettingsPane(rawValue: itemIdentifier.rawValue) else { return nil }
+        let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+        item.label = pane.title
+        item.image = NSImage(systemSymbolName: pane.symbolName, accessibilityDescription: pane.title)
+        item.target = self
+        item.action = #selector(selectPane(_:))
+        return item
     }
 }
 
@@ -42,19 +121,23 @@ struct SettingsView: View {
         let requestPastePermission: () -> Void
     }
 
+    @ObservedObject var selection: SettingsSelection
     @ObservedObject var preferences: Preferences
     let actions: Actions
 
     var body: some View {
-        TabView {
-            GeneralSettings(preferences: preferences, actions: actions)
-                .tabItem { Label("General", systemImage: "gearshape") }
-
-            PrivacySettings(preferences: preferences, actions: actions)
-                .tabItem { Label("Privacy", systemImage: "hand.raised") }
+        Group {
+            switch selection.pane {
+            case .general:
+                GeneralSettings(preferences: preferences, actions: actions)
+            case .privacy:
+                PrivacySettings(preferences: preferences, actions: actions)
+            }
         }
-        .frame(width: 480, height: 400)
-        .padding(.top, 8)
+        .formStyle(.grouped)
+        .scrollDisabled(true)
+        .frame(width: 500)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -69,9 +152,7 @@ private struct GeneralSettings: View {
             Section {
                 Toggle("Open Insert at login", isOn: $preferences.launchAtLogin)
                 if let error = preferences.loginItemError {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.red)
+                    SettingsWarning(text: error)
                 }
                 Toggle("Hide the Dock icon", isOn: $preferences.hideDockIcon)
             }
@@ -81,39 +162,35 @@ private struct GeneralSettings: View {
                     ShortcutRecorder(shortcut: $preferences.hotKeyShortcut)
                 }
                 if preferences.hotKeyIsUnavailable {
-                    Label("Another app uses this shortcut. Record a different shortcut.", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+                    SettingsWarning(text: "Another app uses this shortcut. Record a different shortcut.")
                 }
             }
 
             Section {
-                Toggle("Paste directly into the active app", isOn: $preferences.pasteDirectly)
+                Toggle(isOn: $preferences.pasteDirectly) {
+                    Text("Paste directly into the active app")
+                    Text("When this is off, Insert only copies the clip.")
+                }
                 if preferences.pasteDirectly && !isTrusted {
-                    HStack {
-                        Label("Insert needs the Accessibility permission to paste. Without it, Insert only copies.", systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                        Spacer()
+                    LabeledContent {
                         Button("Allow…", action: actions.requestPastePermission)
+                    } label: {
+                        SettingsWarning(text: "Insert needs the Accessibility permission to paste.")
                     }
                 }
             }
 
             Section {
-                Picker("Keep in history", selection: $preferences.historyLimit) {
+                Picker(selection: $preferences.historyLimit) {
                     ForEach(Preferences.historyLimitOptions, id: \.self) { limit in
                         Text("\(limit.formatted()) clips").tag(limit)
                     }
+                } label: {
+                    Text("Keep in history")
+                    Text("Insert deletes the oldest clips first. Pinned clips do not count.")
                 }
-            } footer: {
-                Text("Pinned clips do not count. Insert deletes the oldest clips when the history is full.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .formStyle(.grouped)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             isTrusted = AXIsProcessTrusted()
         }
@@ -127,49 +204,55 @@ private struct PrivacySettings: View {
     var body: some View {
         Form {
             Section {
-                if preferences.ignoredApps.isEmpty {
-                    Text("No ignored apps")
-                        .foregroundStyle(.secondary)
+                LabeledContent {
+                    Button("Add App…", action: addIgnoredApp)
+                } label: {
+                    Text("Ignored apps")
+                    Text("Insert does not save a copy that you make while one of these apps is in front.")
                 }
 
                 ForEach(preferences.ignoredApps, id: \.bundleID) { app in
-                    HStack(spacing: 8) {
-                        if let icon = AppIconStore.shared.entry(for: app).icon {
-                            Image(nsImage: icon)
-                                .resizable()
-                                .frame(width: 20, height: 20)
-                        }
-                        Text(app.name)
-                        Spacer()
+                    LabeledContent {
                         Button {
                             preferences.ignoredApps.removeAll { $0.bundleID == app.bundleID }
                         } label: {
                             Image(systemName: "minus.circle.fill")
+                                .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
                         .help("Remove \(app.name)")
+                    } label: {
+                        HStack(spacing: 8) {
+                            if let icon = AppIconStore.shared.entry(for: app).icon {
+                                Image(nsImage: icon)
+                                    .resizable()
+                                    .frame(width: 20, height: 20)
+                            }
+                            Text(app.name)
+                        }
                     }
                 }
-
-                Button("Add App…", action: addIgnoredApp)
-            } header: {
-                Text("Ignored Apps")
             } footer: {
-                Text("Insert does not save a copy that you make while one of these apps is in front. Insert also skips items that an app marks as concealed or transient, such as passwords from a password manager.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text("Insert always skips items that an app marks as concealed or transient, such as passwords from a password manager.")
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             Section {
-                Toggle("Pause capture", isOn: $preferences.capturePaused)
-                LabeledContent("Delete all clips that are not pinned") {
+                Toggle(isOn: $preferences.capturePaused) {
+                    Text("Pause capture")
+                    Text("Insert saves no new clips while capture is paused.")
+                }
+            }
+
+            Section {
+                LabeledContent {
                     Button("Clear History…", action: actions.clearHistory)
+                } label: {
+                    Text("History")
+                    Text("Delete all clips that are not pinned.")
                 }
             }
         }
-        .formStyle(.grouped)
     }
 
     private func addIgnoredApp() {
@@ -187,6 +270,16 @@ private struct PrivacySettings: View {
             let name = FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
             preferences.ignoredApps.append(SourceApp(bundleID: bundleID, name: name))
         }
+    }
+}
+
+private struct SettingsWarning: View {
+    let text: String
+
+    var body: some View {
+        Label(text, systemImage: "exclamationmark.triangle.fill")
+            .font(.callout)
+            .foregroundStyle(.orange)
     }
 }
 
