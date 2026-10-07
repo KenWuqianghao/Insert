@@ -1,12 +1,25 @@
 # Insert
 
-![Insert tray preview](docs/assets/insert-hero.png)
+![The Insert tray at the bottom of the screen, with a row of clip cards](docs/assets/insert-tray.png)
 
 **Insert** is a native clipboard tray for macOS. Press the shortcut and the tray comes up from the bottom of the screen. Select a clip and Insert pastes it into the app that you use.
 
 Product page: https://insert-app.vercel.app
 
 Insert has no account and no cloud sync. All data stays on your Mac.
+
+## Demo
+
+[![Demo of Insert: open the tray, preview a clip, delete, search, change the pinboard, and paste](docs/assets/insert-demo.gif)](docs/assets/insert-demo.mp4)
+
+Click the demo to open the [full-quality video](docs/assets/insert-demo.mp4). The demo shows these steps:
+
+1. Press `Command+Shift+V` to open the tray.
+2. Press the arrow keys to move the selection. Press `Space` to see a large preview.
+3. Press `Backspace` to delete a clip.
+4. Type to search.
+5. Press `Tab` to go to the next pinboard.
+6. Hold `Command`, then press `1` to paste the first card.
 
 ## Highlights
 
@@ -20,10 +33,12 @@ Insert has no account and no cloud sync. All data stays on your Mac.
 - Hold `Command` to show the numbers 1 to 9 on the cards. Press `Command+1` to `Command+9` to paste that card.
 - Insert skips items that an app marks as concealed or transient, for example passwords from a password manager.
 - You can pause capture, and you can ignore the apps that you select.
-- The Settings window has the global shortcut, the Dock icon, launch at login, direct paste, and the history limit.
+- The Settings window has two tabs. **General** has launch at login, the Dock icon, the global shortcut, direct paste, and the history limit. **Privacy** has the ignored apps, the capture pause, and the command to clear the history.
 - Insert stores text, links, files, images, PDFs, rich text, colors, and common media types.
 
-![Insert tray screenshot](docs/assets/insert-tray.png)
+![The large preview of an image clip, above the row of cards](docs/assets/insert-preview.png)
+
+<img src="docs/assets/insert-settings.png" alt="The General tab of the Settings window" width="500">
 
 ## Download
 
@@ -100,11 +115,13 @@ make dev
 
 This creates `build/InsertDev.app`. Use it to test a build while an installed Insert runs.
 
-To generate the marketing screenshots used in this README:
+To make the screenshots and the demo video in this README again:
 
 ```sh
 make marketing-assets
 ```
+
+This command records the real tray views with sample clips. It does not read your clipboard. It needs `ffmpeg` and the Screen Recording permission for your terminal.
 
 To build the installer:
 
