@@ -6,6 +6,7 @@ DEV_BUNDLE := $(BUILD_DIR)/$(APP_NAME)Dev.app
 DMG_NAME := $(APP_NAME)-Installer.dmg
 DMG_PATH := $(BUILD_DIR)/$(DMG_NAME)
 DMG_STAGING := $(BUILD_DIR)/dmg
+MARKETING_DIR := $(BUILD_DIR)/marketing
 MACOS_DIR := $(APP_BUNDLE)/Contents/MacOS
 RESOURCES_DIR := $(APP_BUNDLE)/Contents/Resources
 APP_ICON := Resources/AppIcon.icns
@@ -64,9 +65,30 @@ dmg: sign
 	hdiutil verify "$(DMG_PATH)"
 	@echo "Created $(DMG_PATH)"
 
+# The tool records the real tray views with sample clips. It needs the Screen Recording permission and ffmpeg.
 marketing-assets:
-	@mkdir -p "$(BUILD_DIR)/ModuleCache"
-	CLANG_MODULE_CACHE_PATH="$(BUILD_DIR)/ModuleCache" swift Tools/GenerateMarketingAssets.swift
+	@mkdir -p "$(MARKETING_DIR)"
+	swiftc -O -parse-as-library -target $(ARCH)-apple-macosx15.0 \
+		$(filter-out Sources/Insert/App/InsertApp.swift,$(SOURCES)) Tools/GenerateMarketingAssets.swift \
+		-o "$(BUILD_DIR)/MarketingAssets" \
+		-framework AppKit \
+		-framework SwiftUI \
+		-framework Carbon \
+		-framework ServiceManagement \
+		-framework ApplicationServices \
+		-framework CryptoKit \
+		-framework ImageIO \
+		-framework UniformTypeIdentifiers \
+		-framework ScreenCaptureKit
+	"$(BUILD_DIR)/MarketingAssets" "$(MARKETING_DIR)"
+	@cp "$(MARKETING_DIR)"/insert-*.png docs/assets/
+	ffmpeg -loglevel error -y -i "$(MARKETING_DIR)/insert-demo-raw.mp4" \
+		-vf "fps=30,scale=1920:-2:flags=lanczos" -c:v libx264 -crf 23 -preset slow -pix_fmt yuv420p -movflags +faststart -an \
+		docs/assets/insert-demo.mp4
+	ffmpeg -loglevel error -y -i "$(MARKETING_DIR)/insert-demo-raw.mp4" \
+		-vf "fps=12,scale=960:-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
+		docs/assets/insert-demo.gif
+	@echo "Updated docs/assets"
 
 install: build
 	@rm -rf "/Applications/$(APP_NAME).app"
