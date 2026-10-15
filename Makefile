@@ -19,6 +19,7 @@ SIGN_IDENTITY ?= $(or $(shell security find-identity -v -p codesigning 2>/dev/nu
 .PHONY: build dev run sign dmg clean install marketing-assets
 
 build: $(APP_BUNDLE)
+	codesign --force --options runtime --sign "$(SIGN_IDENTITY)" "$(APP_BUNDLE)"
 
 $(APP_ICON): Tools/GenerateIcon.swift
 	swift Tools/GenerateIcon.swift
@@ -38,7 +39,6 @@ $(APP_BUNDLE): $(SOURCES) Info.plist $(APP_ICON)
 		-framework UniformTypeIdentifiers
 	@cp Info.plist "$(APP_BUNDLE)/Contents/Info.plist"
 	@cp "$(APP_ICON)" "$(RESOURCES_DIR)/AppIcon.icns"
-	codesign --force --options runtime --sign "$(SIGN_IDENTITY)" "$(APP_BUNDLE)"
 	@touch "$(APP_BUNDLE)"
 
 # A copy with its own bundle id. Its storage folder and defaults are separate from an installed Insert.
