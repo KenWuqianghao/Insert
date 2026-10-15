@@ -51,6 +51,17 @@ final class PasteService {
     }
 
     func requestPermission() {
+        // macOS keeps the grant for the code signature it saw first. A new build signs with a new
+        // signature, so the switch in System Settings stays on but does not apply to this build.
+        // Remove the old entry so that macOS adds one for the running build.
+        if let bundleID = Bundle.main.bundleIdentifier {
+            let reset = Process()
+            reset.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+            reset.arguments = ["reset", "Accessibility", bundleID]
+            try? reset.run()
+            reset.waitUntilExit()
+        }
+
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
 

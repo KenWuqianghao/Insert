@@ -12,11 +12,14 @@ RESOURCES_DIR := $(APP_BUNDLE)/Contents/Resources
 APP_ICON := Resources/AppIcon.icns
 ARCH := $(shell uname -m)
 SOURCES := $(shell find Sources/Insert -name '*.swift' | sort)
-SIGN_IDENTITY ?= -
+# A certificate gives every build the same designated requirement, so the Accessibility permission stays valid after a rebuild.
+# Without one, the build is ad-hoc signed and macOS asks for the permission again after each build.
+SIGN_IDENTITY ?= $(or $(shell security find-identity -v -p codesigning 2>/dev/null | awk -F'"' 'NR==1 && NF>2 {print $$2}'),-)
 
 .PHONY: build dev run sign dmg clean install marketing-assets
 
 build: $(APP_BUNDLE)
+	codesign --force --options runtime --sign "$(SIGN_IDENTITY)" "$(APP_BUNDLE)"
 
 $(APP_ICON): Tools/GenerateIcon.swift
 	swift Tools/GenerateIcon.swift
@@ -43,7 +46,7 @@ dev: build
 	@rm -rf "$(DEV_BUNDLE)"
 	@cp -R "$(APP_BUNDLE)" "$(DEV_BUNDLE)"
 	@/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $(BUNDLE_ID).dev" "$(DEV_BUNDLE)/Contents/Info.plist"
-	@codesign --force --sign - "$(DEV_BUNDLE)"
+	@codesign --force --options runtime --sign "$(SIGN_IDENTITY)" "$(DEV_BUNDLE)"
 	@echo "Created $(DEV_BUNDLE) ($(BUNDLE_ID).dev)"
 
 run: build
