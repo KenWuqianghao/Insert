@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import Combine
 import ScreenCaptureKit
 import SwiftUI
@@ -29,27 +30,33 @@ enum MarketingAssets {
     }
 }
 
+private struct Caption: Equatable {
+    let keys: [String]
+    let label: String
+}
+
 @MainActor
 private final class Stage: ObservableObject {
-    @Published var keys: String?
+    @Published var caption: Caption?
     @Published var pastedText = ""
 
-    private var keysToken = 0
+    private var captionToken = 0
 
-    func show(keys: String) {
-        keysToken += 1
-        let token = keysToken
-        self.keys = keys
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
-            guard let self, self.keysToken == token else { return }
-            self.keys = nil
+    func show(_ keys: [String], _ label: String, for seconds: Double = 1.3) {
+        captionToken += 1
+        let token = captionToken
+        caption = Caption(keys: keys, label: label)
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+            guard let self, self.captionToken == token else { return }
+            self.caption = nil
         }
     }
 }
 
 @MainActor
 private final class Director {
-    private static let stageSize = NSSize(width: 1440, height: 810)
+    /// The size of a 14-inch MacBook Pro screen at the default scale, so the video fits a laptop frame.
+    static let stageSize = NSSize(width: 1512, height: 945)
     private static let storageID = "com.local.Insert.marketing"
 
     private let output: URL
@@ -74,7 +81,7 @@ private final class Director {
             backing: .buffered,
             defer: false
         )
-        window.appearance = NSAppearance(named: .darkAqua)
+        NSApp.appearance = NSAppearance(named: .aqua)
         window.ignoresMouseEvents = true
         window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         window.isReleasedWhenClosed = false
@@ -120,9 +127,11 @@ private final class Director {
 
         try seedLibrary()
 
-        // The stage is behind all other windows.
+        // macOS slows the drawing of a window that other windows cover, and the recording then loses frames.
+        // So the stage is in front of the other windows while the tool runs. It ignores the mouse.
         center(window)
-        window.order(.below, relativeTo: 0)
+        window.level = .floating
+        window.orderFrontRegardless()
         await pause(0.5)
 
         let capture = try await WindowCapture(window: window, includesShadow: false)
@@ -141,56 +150,138 @@ private final class Director {
         hideTray()
         await pause(0.6)
 
-        try await capture.startRecording(to: output.appendingPathComponent("insert-demo-raw.mp4"))
-        await playDemo()
-        try await capture.stopRecording()
+        try await recordDemo(with: capture)
 
         try await captureSettings()
     }
 
     // MARK: Demo
 
+    /// One key press in the demo. A step with a chapter name starts a part of the demo that the landing page can seek to.
+    private struct Step {
+        let seconds: Double
+        let animates: Bool
+        let chapter: String?
+    }
+
+    private struct Chapter: Encodable {
+        let name: String
+        let at: Double
+    }
+
+    private var steps: [Step] = []
+    private var recordingStart = Date()
+
+    /// ScreenCaptureKit drops frames when the Mac is busy, and the video then skips animations.
+    /// Each take is checked. If frames are missing, the tool records the demo again.
+    private func recordDemo(with capture: WindowCapture) async throws {
+        let url = output.appendingPathComponent("insert-demo-raw.mp4")
+        let takes = 3
+        for take in 1...takes {
+            stage.pastedText = ""
+            steps = []
+            await pause(0.6)
+
+            try await capture.startRecording(to: url)
+            recordingStart = Date()
+            await playDemo()
+            try await capture.stopRecording()
+
+            let frames = try await frameTimes(in: url)
+            let incomplete = steps.filter { step in
+                let soon = frames.filter { $0 >= step.seconds && $0 < step.seconds + 0.4 }.count
+                // A tray animation is about 0.25 s, so a complete one gives at least 10 frames at 60 fps.
+                return soon < (step.animates ? 10 : 1)
+            }
+            if incomplete.isEmpty {
+                try writeChapters(frames: frames)
+                return
+            }
+            let times = incomplete.map { String(format: "%.1f s", $0.seconds) }.joined(separator: ", ")
+            FileHandle.standardError.write(Data("Take \(take) of \(takes) lost frames after the steps at \(times).\n".utf8))
+        }
+        throw AssetError.message("Each take of the demo lost frames. Unlock the screen and keep the display on, close busy apps, and try again.")
+    }
+
+    private func frameTimes(in url: URL) async throws -> [Double] {
+        let asset = AVURLAsset(url: url)
+        guard let track = try await asset.loadTracks(withMediaType: .video).first else {
+            throw AssetError.message("The demo recording has no video track.")
+        }
+        let reader = try AVAssetReader(asset: asset)
+        let trackOutput = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+        reader.add(trackOutput)
+        reader.startReading()
+        var sampleTimes: [Double] = []
+        while let sample = trackOutput.copyNextSampleBuffer() {
+            if CMSampleBufferGetNumSamples(sample) > 0 {
+                sampleTimes.append(CMSampleBufferGetPresentationTimeStamp(sample).seconds)
+            }
+        }
+        guard reader.status == .completed else {
+            throw AssetError.message("Could not read the demo recording: \(String(describing: reader.error))")
+        }
+        // The sample times do not start at zero. The first frame of the video is the first frame of the recording.
+        let start = sampleTimes.min() ?? 0
+        return sampleTimes.map { $0 - start }.sorted()
+    }
+
+    /// Each chapter starts at the first frame of its step, so a seek shows the new caption and not the previous one.
+    private func writeChapters(frames: [Double]) throws {
+        let chapters = steps.compactMap { step -> Chapter? in
+            guard let name = step.chapter, let frame = frames.first(where: { $0 >= step.seconds }) else { return nil }
+            return Chapter(name: name, at: (frame * 100).rounded(.up) / 100)
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted]
+        try encoder.encode(chapters).write(to: output.appendingPathComponent("insert-demo-chapters.json"))
+    }
+
     private func playDemo() async {
-        await pause(0.8)
-        stage.show(keys: "⇧ ⌘ V")
+        await pause(0.9)
+
+        cue(["⇧", "⌘", "V"], "Open Insert", for: 1.6, animates: true, chapter: "Open")
         showTray()
-        await pause(1.4)
+        await pause(1.6)
 
-        await press("→", .move(1))
-        await press("→", .move(1), hold: 0.7)
-        await press("Space", .togglePreview, hold: 1.7)
-        await press("→", .move(1), hold: 1.4)
-        await press("Space", .togglePreview, hold: 0.8)
+        await press(["→"], "Move", .move(1), hold: 0.5)
+        await press(["→"], "Move", .move(1), hold: 0.6)
 
-        await press("→", .move(1), hold: 0.6)
-        await press("⌫", .deleteSelection, hold: 1.0)
+        await press(["Space"], "Preview", .togglePreview, hold: 1.8, animates: true, chapter: "Preview")
+        await press(["→"], "Move", .move(1), hold: 1.3)
+        await press(["Space"], "Close the preview", .togglePreview, hold: 0.9, animates: true)
 
         var typed = ""
         for character in "git" {
             typed.append(character)
-            stage.show(keys: typed.map(String.init).joined(separator: " ").uppercased())
+            cue(typed.uppercased().map(String.init), "Search", for: 1.6, chapter: typed.count == 1 ? "Search" : nil)
             model.query = typed
-            await pause(0.22)
+            await pause(0.24)
         }
-        await pause(1.4)
-        await press("Esc", .cancel, hold: 0.8)
+        await pause(1.5)
+        await press(["Esc"], "Clear the search", .cancel, hold: 0.8)
 
-        await press("Tab", .switchScope(1), hold: 1.1)
-        await press("Tab", .switchScope(1), hold: 1.1)
-        await press("Tab", .switchScope(1), hold: 0.8)
+        await press(["Tab"], "Next pinboard", .switchScope(1), hold: 1.2, animates: true, chapter: "Pinboards")
+        await press(["Tab"], "Next pinboard", .switchScope(1), hold: 1.2, animates: true)
+        await press(["Tab"], "Next pinboard", .switchScope(1), hold: 0.8, animates: true)
 
-        stage.show(keys: "⌘")
+        cue(["⌘"], "Quick paste", for: 1.2, chapter: "Paste")
         model.isCommandHeld = true
         await pause(1.1)
-        stage.show(keys: "⌘ 1")
+        cue(["⌘", "1"], "Paste the first card", for: 1.4, animates: true)
         model.perform(.activateIndex(0))
-        await pause(2.4)
+        await pause(2.8)
     }
 
-    private func press(_ keys: String, _ command: PanelCommand, hold: Double = 0.45) async {
-        stage.show(keys: keys)
+    private func press(_ keys: [String], _ label: String, _ command: PanelCommand, hold: Double, animates: Bool = false, chapter: String? = nil) async {
+        cue(keys, label, animates: animates, chapter: chapter)
         model.perform(command)
         await pause(hold)
+    }
+
+    private func cue(_ keys: [String], _ label: String, for seconds: Double = 1.3, animates: Bool = false, chapter: String? = nil) {
+        steps.append(Step(seconds: Date().timeIntervalSince(recordingStart), animates: animates, chapter: chapter))
+        stage.show(keys, label, for: seconds)
     }
 
     private func pause(_ seconds: Double) async {
@@ -323,7 +414,7 @@ private final class Director {
                 item.setString(text, forType: .string)
                 pasteboard.writeObjects([item])
             }),
-            (190, terminal, snippets, { $0.setString("git switch -c release/0.3\nmake dmg\ngit tag v0.3.0 && git push --tags", forType: .string) }),
+            (190, terminal, snippets, { $0.setString("git switch -c release\nmake dmg\ngh release create --generate-notes", forType: .string) }),
             (125, finder, nil, { $0.writeObjects(fileURLs.map { $0 as NSURL }) }),
             (48, messages, nil, { $0.setString("Lunch at 12:30? The usual place.", forType: .string) }),
             (26, freeform, design, { $0.setString("#5B8DEF", forType: .string) }),
@@ -335,7 +426,7 @@ private final class Director {
                 pasteboard.writeObjects([item])
             }),
             (0.3, notes, nil, { $0.setString(
-                "Insert 0.3 is ready.\n\n• A tray of cards at the bottom of the screen\n• Pinboards for the clips that you use frequently\n• A large preview when you press Space\n• Search, and a filter for each type of clip",
+                "What is new in Insert:\n\n• A tray of cards at the bottom of the screen\n• Pinboards for the clips that you use frequently\n• A large preview when you press Space\n• Search, and a filter for each type of clip",
                 forType: .string
             ) })
         ]
@@ -524,115 +615,200 @@ private struct DesktopView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            wallpaper
+            Image(nsImage: Wallpaper.image)
+                .resizable()
 
-            DocumentWindow(pastedText: stage.pastedText)
-                .frame(width: 860, height: 540)
-                .padding(.top, 62)
+            ComposeWindow(pastedText: stage.pastedText)
+                .frame(width: 820, height: 470)
+                .padding(.top, 104)
 
-            if let keys = stage.keys {
-                KeysPill(keys: keys)
-                    .padding(.top, 14)
-                    .transition(.opacity)
+            MenuBar()
+
+            if let caption = stage.caption {
+                CaptionView(caption: caption)
+                    .padding(.top, 40)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .animation(.easeOut(duration: 0.15), value: stage.keys)
+        // Only the show and the hide animate. A new caption replaces the old one at once, so the two labels do not overlap.
+        .animation(.easeOut(duration: 0.16), value: stage.caption == nil)
     }
+}
 
-    private var wallpaper: some View {
-        ZStack {
-            LinearGradient(
-                colors: [Color(red: 0.20, green: 0.16, blue: 0.44), Color(red: 0.07, green: 0.24, blue: 0.42)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            Circle()
-                .fill(Color(red: 0.98, green: 0.47, blue: 0.42))
-                .frame(width: 620, height: 620)
-                .blur(radius: 150)
-                .offset(x: -520, y: 250)
-            Circle()
-                .fill(Color(red: 0.25, green: 0.78, blue: 0.80))
-                .frame(width: 560, height: 560)
-                .blur(radius: 150)
-                .offset(x: 520, y: -160)
-            Circle()
-                .fill(Color(red: 0.62, green: 0.40, blue: 0.95))
-                .frame(width: 460, height: 460)
-                .blur(radius: 140)
-                .offset(x: 360, y: 330)
+/// The stage shows it as a still image. With live blur filters, the tray backdrop drew too slowly and the recording lost frames.
+private struct Wallpaper: View {
+    @MainActor static let image: NSImage = {
+        let renderer = ImageRenderer(content: Wallpaper().frame(width: Director.stageSize.width, height: Director.stageSize.height))
+        renderer.scale = 2
+        return renderer.nsImage ?? NSImage()
+    }()
+
+    var body: some View {
+        GeometryReader { proxy in
+            let size = proxy.size
+            ZStack {
+                LinearGradient(
+                    colors: [Color(red: 1.0, green: 0.72, blue: 0.30), Color(red: 0.99, green: 0.44, blue: 0.10), Color(red: 0.86, green: 0.20, blue: 0.08)],
+                    startPoint: .topTrailing,
+                    endPoint: .bottomLeading
+                )
+                Fold(phase: 0.0, depth: 0.32)
+                    .fill(LinearGradient(colors: [Color(red: 1.0, green: 0.88, blue: 0.60).opacity(0.85), .clear], startPoint: .top, endPoint: .bottom))
+                    .blur(radius: 18)
+                Fold(phase: 1.3, depth: 0.55)
+                    .fill(LinearGradient(colors: [Color(red: 1.0, green: 0.55, blue: 0.20).opacity(0.9), Color(red: 0.86, green: 0.30, blue: 0.10).opacity(0.0)], startPoint: .top, endPoint: .bottom))
+                    .blur(radius: 10)
+                Fold(phase: 2.4, depth: 0.74)
+                    .fill(LinearGradient(colors: [Color(red: 0.95, green: 0.38, blue: 0.12).opacity(0.95), Color(red: 0.62, green: 0.14, blue: 0.08)], startPoint: .top, endPoint: .bottom))
+                    .blur(radius: 6)
+                Circle()
+                    .fill(Color(red: 1.0, green: 0.93, blue: 0.70))
+                    .frame(width: size.width * 0.5)
+                    .blur(radius: 160)
+                    .offset(x: size.width * 0.32, y: -size.height * 0.42)
+                    .opacity(0.8)
+            }
         }
     }
 }
 
-/// A plain document window. It is the app that gets the paste in the demo.
-private struct DocumentWindow: View {
+private struct Fold: Shape {
+    let phase: Double
+    let depth: Double
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let top = rect.height * depth
+        path.move(to: CGPoint(x: 0, y: rect.height))
+        for step in 0...64 {
+            let x = rect.width * Double(step) / 64
+            let angle = Double(step) / 64 * .pi * 1.6 + phase
+            let y = top + sin(angle) * rect.height * 0.09 + cos(angle * 0.5) * rect.height * 0.05
+            path.addLine(to: CGPoint(x: x, y: y))
+        }
+        path.addLine(to: CGPoint(x: rect.width, y: rect.height))
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct MenuBar: View {
+    var body: some View {
+        HStack(spacing: 20) {
+            Text("Mail").fontWeight(.bold)
+            ForEach(["File", "Edit", "View", "Mailbox", "Message", "Format", "Window", "Help"], id: \.self) { Text($0) }
+            Spacer()
+            Image(systemName: "doc.on.clipboard")
+            Image(systemName: "wifi")
+            Image(systemName: "battery.75percent")
+            Image(systemName: "magnifyingglass")
+            Text("Thu Nov 6  9:41")
+        }
+        .font(.system(size: 13, weight: .medium))
+        .foregroundStyle(Color.black.opacity(0.85))
+        .padding(.horizontal, 22)
+        .frame(height: 30)
+        .background(Color.white.opacity(0.32))
+    }
+}
+
+/// The app that gets the paste in the demo.
+private struct ComposeWindow: View {
     let pastedText: String
+
+    private let ink = Color(red: 0.11, green: 0.11, blue: 0.12)
+    private let secondary = Color(red: 0.11, green: 0.11, blue: 0.12).opacity(0.5)
+    private let rule = Color.black.opacity(0.08)
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {
-                HStack(spacing: 8) {
-                    ForEach([Color(red: 1, green: 0.37, blue: 0.34), Color(red: 1, green: 0.74, blue: 0.18), Color(red: 0.16, green: 0.79, blue: 0.25)], id: \.self) { color in
-                        Circle()
-                            .fill(color)
-                            .frame(width: 12, height: 12)
-                    }
-                    Spacer()
+            HStack(spacing: 8) {
+                ForEach([Color(red: 1, green: 0.37, blue: 0.34), Color(red: 1, green: 0.74, blue: 0.18), Color(red: 0.16, green: 0.79, blue: 0.25)], id: \.self) { color in
+                    Circle()
+                        .fill(color)
+                        .frame(width: 12, height: 12)
                 }
-                Text("Team update")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 14)
-            .frame(height: 40)
-            .background(Color(white: 0.19))
-
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Team update")
-                    .font(.system(size: 28, weight: .bold))
-                Text("Hi all,")
+                Spacer()
+                Image(systemName: "paperplane.fill")
                     .font(.system(size: 15))
+                    .foregroundStyle(secondary)
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 46)
+
+            field("To:", "Design team")
+            field("Subject:", "Release notes")
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Hi all,")
+                Text("Here are the notes for the release:")
 
                 if !pastedText.isEmpty {
                     Text(pastedText)
-                        .font(.system(size: 15))
                         .lineSpacing(5)
-                        .transition(.opacity)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
                 RoundedRectangle(cornerRadius: 1)
                     .fill(Color.accentColor)
-                    .frame(width: 2, height: 20)
+                    .frame(width: 2, height: 19)
             }
+            .font(.system(size: 15))
+            .foregroundStyle(ink)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(.horizontal, 44)
-            .padding(.top, 30)
-            .background(Color(white: 0.13))
+            .padding(.horizontal, 24)
+            .padding(.top, 20)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
-        .shadow(color: .black.opacity(0.45), radius: 30, y: 16)
-        .animation(.easeOut(duration: 0.18), value: pastedText)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.black.opacity(0.10), lineWidth: 0.5))
+        .shadow(color: Color(red: 0.45, green: 0.12, blue: 0.0).opacity(0.35), radius: 40, y: 22)
+        .animation(.easeOut(duration: 0.22), value: pastedText)
+    }
+
+    private func field(_ name: String, _ value: String) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Text(name).foregroundStyle(secondary)
+                Text(value).foregroundStyle(ink)
+                Spacer()
+            }
+            .font(.system(size: 14))
+            .padding(.horizontal, 24)
+            .frame(height: 38)
+            rule.frame(height: 1).padding(.leading, 24)
+        }
     }
 }
 
-private struct KeysPill: View {
-    let keys: String
+private struct CaptionView: View {
+    let caption: Caption
 
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(Array(keys.split(separator: " ").enumerated()), id: \.offset) { _, key in
-                Text(key)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .padding(.horizontal, 8)
-                    .frame(minWidth: 28, minHeight: 26)
-                    .background(Color.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        HStack(spacing: 14) {
+            HStack(spacing: 6) {
+                ForEach(Array(caption.keys.enumerated()), id: \.offset) { _, key in
+                    Text(key)
+                        .font(.system(size: 20, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color(white: 0.12))
+                        .padding(.horizontal, 10)
+                        .frame(minWidth: 38, minHeight: 38)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(Color.white)
+                                .shadow(color: .black.opacity(0.35), radius: 0, y: 2)
+                        )
+                }
             }
+            Text(caption.label)
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.trailing, 6)
         }
-        .foregroundStyle(.white)
-        .padding(5)
-        .background(Color.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.vertical, 9)
+        .padding(.horizontal, 10)
+        .background(Color.black.opacity(0.72), in: Capsule())
+        .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
     }
 }

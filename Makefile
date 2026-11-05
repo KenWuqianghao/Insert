@@ -68,6 +68,10 @@ dmg: sign
 	hdiutil verify "$(DMG_PATH)"
 	@echo "Created $(DMG_PATH)"
 
+# The capture can be a few pixels larger than the 16:10 stage. This crop removes the extra pixels.
+# ScreenCaptureKit writes no frames while the stage does not change, so the pad holds the last frame after the paste.
+DEMO_FRAME := crop='trunc(min(iw\,ih*16/10)/2)*2':'trunc(min(ih\,iw*10/16)/2)*2',tpad=stop_mode=clone:stop_duration=1.5
+
 # The tool records the real tray views with sample clips. It needs the Screen Recording permission and ffmpeg.
 marketing-assets:
 	@mkdir -p "$(MARKETING_DIR)"
@@ -82,16 +86,17 @@ marketing-assets:
 		-framework CryptoKit \
 		-framework ImageIO \
 		-framework UniformTypeIdentifiers \
-		-framework ScreenCaptureKit
+		-framework ScreenCaptureKit \
+		-framework AVFoundation
 	"$(BUILD_DIR)/MarketingAssets" "$(MARKETING_DIR)"
 	@cp "$(MARKETING_DIR)"/insert-*.png docs/assets/
 	ffmpeg -loglevel error -y -i "$(MARKETING_DIR)/insert-demo-raw.mp4" \
-		-vf "fps=30,scale=1920:-2:flags=lanczos" -c:v libx264 -crf 23 -preset slow -pix_fmt yuv420p -movflags +faststart -an \
+		-vf "$(DEMO_FRAME),fps=60,scale=1920:1200:flags=lanczos" -c:v libx264 -crf 23 -preset slow -pix_fmt yuv420p -movflags +faststart -an \
 		docs/assets/insert-demo.mp4
 	ffmpeg -loglevel error -y -i "$(MARKETING_DIR)/insert-demo-raw.mp4" \
-		-vf "fps=12,scale=960:-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
+		-vf "$(DEMO_FRAME),fps=12,scale=960:600:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
 		docs/assets/insert-demo.gif
-	@echo "Updated docs/assets"
+	@echo "Updated docs/assets. The step times of the demo are in $(MARKETING_DIR)/insert-demo-chapters.json"
 
 install: build
 	@rm -rf "/Applications/$(APP_NAME).app"

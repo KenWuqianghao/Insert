@@ -10,16 +10,15 @@ Insert has no account and no cloud sync. All data stays on your Mac.
 
 ## Demo
 
-[![Demo of Insert: open the tray, preview a clip, delete, search, change the pinboard, and paste](docs/assets/insert-demo.gif)](docs/assets/insert-demo.mp4)
+[![Demo of Insert: open the tray, preview a clip, search, change the pinboard, and paste](docs/assets/insert-demo.gif)](docs/assets/insert-demo.mp4)
 
 Click the demo to open the [full-quality video](docs/assets/insert-demo.mp4). The demo shows these steps:
 
 1. Press `Command+Shift+V` to open the tray.
 2. Press the arrow keys to move the selection. Press `Space` to see a large preview.
-3. Press `Backspace` to delete a clip.
-4. Type to search.
-5. Press `Tab` to go to the next pinboard.
-6. Hold `Command`, then press `1` to paste the first card.
+3. Type to search.
+4. Press `Tab` to go to the next pinboard.
+5. Hold `Command`, then press `1` to paste the first card into the email.
 
 ## Highlights
 
@@ -121,7 +120,7 @@ To make the screenshots and the demo video in this README again:
 make marketing-assets
 ```
 
-This command records the real tray views with sample clips. It does not read your clipboard. It needs `ffmpeg` and the Screen Recording permission for your terminal.
+This command records the real tray views with sample clips. It does not read your clipboard. It needs `ffmpeg` and the Screen Recording permission for your terminal. Keep the screen unlocked while it runs. If the recording loses frames, the command records the demo again. It makes a maximum of three takes.
 
 To build the installer:
 
