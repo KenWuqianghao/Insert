@@ -107,6 +107,8 @@ private final class Director {
             guard let self else { return }
             self.hideTray()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                // The text fades in after the tray closes. The take check needs the frames of each animation.
+                self.addStep(animates: true)
                 self.stage.pastedText = self.library.payload(for: clip.id)?.plainText ?? ""
             }
         }
@@ -280,8 +282,12 @@ private final class Director {
     }
 
     private func cue(_ keys: [String], _ label: String, for seconds: Double = 1.3, animates: Bool = false, chapter: String? = nil) {
-        steps.append(Step(seconds: Date().timeIntervalSince(recordingStart), animates: animates, chapter: chapter))
+        addStep(animates: animates, chapter: chapter)
         stage.show(keys, label, for: seconds)
+    }
+
+    private func addStep(animates: Bool, chapter: String? = nil) {
+        steps.append(Step(seconds: Date().timeIntervalSince(recordingStart), animates: animates, chapter: chapter))
     }
 
     private func pause(_ seconds: Double) async {
