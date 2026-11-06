@@ -357,6 +357,7 @@ private final class Director {
         let known = Set(NSApp.windows.map(\.windowNumber))
         let controller = SettingsWindowController(
             preferences: preferences,
+            licenseStore: LicenseStore(),
             actions: .init(clearHistory: {}, requestPastePermission: {})
         )
         controller.show()
