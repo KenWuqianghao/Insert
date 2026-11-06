@@ -49,6 +49,19 @@ MINIMUM_SYSTEM=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$PL
 
 make -C "$ROOT" dmg
 SPARKLE_BIN="$ROOT/vendor/Sparkle-$(awk '/^SPARKLE_VERSION :=/ {print $3}' "$ROOT/Makefile")/bin"
+APP_PLIST="$ROOT/build/Insert.app/Contents/Info.plist"
+
+# Installed copies accept only updates signed with the key in SUPublicEDKey.
+KEYCHAIN_KEY=$("$SPARKLE_BIN/generate_keys" -p)
+APP_KEY=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "$APP_PLIST")
+if [[ "$KEYCHAIN_KEY" != "$APP_KEY" ]]; then
+	echo "The Sparkle key in the Keychain ($KEYCHAIN_KEY) is not SUPublicEDKey ($APP_KEY). Restore the Keychain key before you release." >&2
+	exit 1
+fi
+
+# The Makefile builds for the host CPU only, so the appcast offers the update only to that CPU.
+ARCHS=$(lipo -archs "$ROOT/build/Insert.app/Contents/MacOS/Insert")
+[[ "$ARCHS" == "arm64" || "$ARCHS" == "x86_64" ]] || { echo "Unexpected architectures: $ARCHS" >&2; exit 1; }
 
 # sign_update reads the EdDSA private key from the login Keychain and prints: sparkle:edSignature="…" length="…"
 ENCLOSURE_ATTRIBUTES=$("$SPARKLE_BIN/sign_update" "$DMG")
@@ -69,6 +82,7 @@ APPCAST_XML=$(cat <<EOF
       <sparkle:version>$BUILD</sparkle:version>
       <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>$MINIMUM_SYSTEM</sparkle:minimumSystemVersion>
+      <sparkle:hardwareRequirements>$ARCHS</sparkle:hardwareRequirements>
       <enclosure url="$DOWNLOAD_URL" type="application/octet-stream" $ENCLOSURE_ATTRIBUTES/>
     </item>
   </channel>
@@ -83,11 +97,16 @@ if $DRY_RUN; then
 	exit 0
 fi
 
+# The appcast is written next to its target first, so the release step is the last one that can fail.
+APPCAST_NEXT="$(mktemp "$APPCAST.XXXXXX")"
+echo "$APPCAST_XML" > "$APPCAST_NEXT"
+trap 'rm -f "$APPCAST_NEXT"' EXIT
+
 gh release create "$TAG" "$DMG" \
 	--repo "$RELEASES_REPO" \
 	--title "Insert $VERSION" \
 	--notes "Insert $VERSION. Download Insert-Installer.dmg, open it, and drag Insert into Applications."
-echo "$APPCAST_XML" > "$APPCAST"
+mv "$APPCAST_NEXT" "$APPCAST"
 
 echo "Released $TAG (build $BUILD). Next:"
 echo "1. Commit Info.plist in this repo."
