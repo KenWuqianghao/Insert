@@ -1,12 +1,14 @@
 import AppKit
 import Carbon
 import Combine
+import Sparkle
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemValidation {
     private let preferences = Preferences()
     private let licenseStore = LicenseStore()
     private let hotKeyManager = HotKeyManager()
+    private let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
     private var library: ClipLibrary?
     private var monitor: ClipboardMonitor?
@@ -94,6 +96,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsController?.show()
     }
 
+    @objc func checkForUpdates(_ sender: Any?) {
+        panelController?.hide()
+        updaterController.checkForUpdates(sender)
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        menuItem.action != #selector(checkForUpdates(_:)) || updaterController.updater.canCheckForUpdates
+    }
+
     @objc private func showLicense() {
         panelController?.hide()
         settingsController?.show(.license)
@@ -123,6 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(NSMenuItem(title: "Clear History…", action: #selector(confirmClearHistory), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ","))
+        menu.addItem(NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates(_:)), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit Insert", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         for menuItem in menu.items where menuItem.action != #selector(NSApplication.terminate(_:)) {

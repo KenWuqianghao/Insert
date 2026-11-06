@@ -15,6 +15,7 @@ enum InsertApp {
     private static func mainMenu() -> NSMenu {
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About Insert", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "Check for Updates…", action: #selector(AppDelegate.checkForUpdates(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Settings…", action: #selector(AppDelegate.showSettings), keyEquivalent: ",")
         appMenu.addItem(.separator())
