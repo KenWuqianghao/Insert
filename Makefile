@@ -16,7 +16,8 @@ SOURCES := $(shell find Sources/Insert -name '*.swift' | sort)
 # A certificate gives every build the same designated requirement, so the Accessibility permission stays valid after a rebuild.
 # Without one, the build is ad-hoc signed and macOS asks for the permission again after each build.
 SIGN_IDENTITY ?= $(or $(shell security find-identity -v -p codesigning 2>/dev/null | awk -F'"' 'NR==1 && NF>2 {print $$2}'),-)
-CODESIGN := codesign --force --options runtime --sign "$(SIGN_IDENTITY)"
+# The hardened runtime rejects an ad-hoc signed Sparkle.framework, so an ad-hoc build does not use it.
+CODESIGN := codesign --force $(if $(filter -,$(SIGN_IDENTITY)),,--options runtime) --sign "$(SIGN_IDENTITY)"
 NOTARY_PROFILE ?= insert-notary
 
 # The release tarball is not in git. The first build downloads it to vendor/ and checks the hash.
