@@ -2,12 +2,12 @@
 # Usage: Tools/release.sh VERSION [--dry-run]
 #
 # Sets the version in Info.plist, builds the DMG, signs it for Sparkle, publishes the GitHub release
-# on KenWuqianghao/insert-releases, and writes the appcast to $APPCAST.
+# on KenWuqianghao/Insert, and writes the appcast to $APPCAST.
 # --dry-run does all of this except the release and the appcast write. It prints the appcast and
 # puts Info.plist back as it was.
 set -euo pipefail
 
-RELEASES_REPO="KenWuqianghao/insert-releases"
+RELEASES_REPO="KenWuqianghao/Insert"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLIST="$ROOT/Info.plist"
 DMG="$ROOT/build/Insert-Installer.dmg"
