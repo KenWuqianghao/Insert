@@ -32,7 +32,7 @@ Click the demo to open the [full-quality video](docs/assets/insert-demo.mp4). Th
 - Hold `Command` to show the numbers 1 to 9 on the cards. Press `Command+1` to `Command+9` to paste that card.
 - Insert skips items that an app marks as concealed or transient, for example passwords from a password manager.
 - You can pause capture, and you can ignore the apps that you select.
-- The Settings window has two tabs. **General** has launch at login, the Dock icon, the global shortcut, direct paste, and the history limit. **Privacy** has the ignored apps, the capture pause, and the command to clear the history.
+- The Settings window has three tabs. **General** has launch at login, the Dock icon, the global shortcut, direct paste, and the history limit. **Privacy** has the ignored apps, the capture pause, and the command to clear the history. **License** shows the trial or the license, and activates a license key.
 - Insert stores text, links, files, images, PDFs, rich text, colors, and common media types.
 
 ![The large preview of an image clip, above the row of cards](docs/assets/insert-preview.png)
@@ -41,29 +41,16 @@ Click the demo to open the [full-quality video](docs/assets/insert-demo.mp4). Th
 
 ## Download
 
-Download the latest drag-to-install disk image from [GitHub Releases](https://github.com/KenWuqianghao/Insert/releases/latest) and open `Insert-Installer.dmg`. Drag **Insert** into **Applications**.
+Download [`Insert-Installer.dmg`](https://github.com/KenWuqianghao/insert-releases/releases/latest/download/Insert-Installer.dmg) and open it. Drag **Insert** into **Applications**.
 
-Local builds are written to:
+Insert has a free trial of 14 days. After the trial, buy a license at https://insert-app.vercel.app/buy. Insert continues to save clips after the trial, but the tray opens only with a license.
 
-```sh
-build/Insert-Installer.dmg
-```
+Insert is not notarized. The first time that you open it, macOS blocks it:
 
-## Gatekeeper Note
+1. Open System Settings > Privacy & Security.
+2. Click **Open Anyway** next to the message about Insert.
 
-`make dmg` now ad-hoc signs the app bundle, clears local extended attributes, and verifies the disk image. That fixes common local packaging issues that make macOS report an app as broken.
-
-For public downloads, macOS still expects a Developer ID certificate and Apple notarization. Without that Apple-issued certificate, a DMG downloaded from the internet can still trigger Gatekeeper warnings on other machines. Build a local signed DMG with:
-
-```sh
-make dmg
-```
-
-If you have a Developer ID Application certificate installed, pass it explicitly:
-
-```sh
-make dmg SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
-```
+Insert installs updates itself with [Sparkle](https://sparkle-project.org). An update does not show this message again.
 
 ## Controls
 
@@ -127,6 +114,33 @@ To build the installer:
 ```sh
 make dmg
 ```
+
+The first build downloads Sparkle to `vendor/` and checks its SHA-256 hash.
+
+## Release
+
+`Tools/release.sh` publishes a new version:
+
+```sh
+Tools/release.sh 1.2.0 --dry-run
+Tools/release.sh 1.2.0
+```
+
+The script does these steps:
+
+1. Sets `CFBundleShortVersionString` to the version and increases `CFBundleVersion` by 1 in `Info.plist`.
+2. Runs `make dmg`.
+3. Signs the DMG with Sparkle's `sign_update`.
+4. Creates the GitHub release `v1.2.0` with `Insert-Installer.dmg` on `KenWuqianghao/insert-releases`.
+5. Writes the appcast to `$APPCAST`. The default is `../insert-site/appcast.xml`.
+
+`--dry-run` does steps 1 to 3, prints the appcast, and puts `Info.plist` back. It does not create the release.
+
+After a release, commit `Info.plist` here, then commit and deploy `appcast.xml` in insert-site.
+
+The Sparkle signing key is in the login Keychain, in the item `https://sparkle-project.org` (account `ed25519`). Back up this item. If you lose it, the installed copies of Insert cannot accept updates. To export a backup file, run `vendor/Sparkle-2.10.1/bin/generate_keys -x <file>`. Keep the file in a safe place. The first time `sign_update` runs, the Keychain asks for permission. Click **Always Allow**.
+
+`make notarize` notarizes and staples the DMG. It needs a Developer ID certificate and a `notarytool` profile, so it is for later. Run it before Sparkle signs the DMG.
 
 ## Windows
 
