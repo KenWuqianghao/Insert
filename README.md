@@ -49,21 +49,34 @@ Local builds are written to:
 build/Insert-Installer.dmg
 ```
 
-## Gatekeeper Note
+## First Open
 
-`make dmg` now ad-hoc signs the app bundle, clears local extended attributes, and verifies the disk image. That fixes common local packaging issues that make macOS report an app as broken.
+Insert is not notarized by Apple, so macOS blocks it the first time that you open it. Open **System Settings** > **Privacy & Security** and click **Open Anyway**. Updates install through Sparkle and do not show this prompt again.
 
-For public downloads, macOS still expects a Developer ID certificate and Apple notarization. Without that Apple-issued certificate, a DMG downloaded from the internet can still trigger Gatekeeper warnings on other machines. Build a local signed DMG with:
+## Release
 
-```sh
-make dmg
-```
-
-If you have a Developer ID Application certificate installed, pass it explicitly:
+`Tools/release.sh` publishes a new version:
 
 ```sh
-make dmg SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+Tools/release.sh 1.2.0 --dry-run
+Tools/release.sh 1.2.0
 ```
+
+The script does these steps:
+
+1. Sets `CFBundleShortVersionString` to the version and increases `CFBundleVersion` by 1 in `Info.plist`.
+2. Runs `make dmg`.
+3. Signs the DMG with Sparkle's `sign_update`.
+4. Creates the GitHub release `v1.2.0` with `Insert-Installer.dmg` on this repository.
+5. Writes the appcast to `$APPCAST`. The default is `../insert-site/appcast.xml`.
+
+`--dry-run` does steps 1 to 3, prints the appcast, and puts `Info.plist` back. It does not create the release.
+
+After a release, commit `Info.plist` here, then commit and deploy `appcast.xml` in insert-site.
+
+The Sparkle signing key is in the login Keychain, in the item `https://sparkle-project.org` (account `ed25519`). Back up this item. If you lose it, the installed copies of Insert cannot accept updates. To export a backup file, run `vendor/Sparkle-2.10.1/bin/generate_keys -x <file>`. Keep the file in a safe place. The first time `sign_update` runs, the Keychain asks for permission. Click **Always Allow**.
+
+`make notarize` notarizes and staples the DMG. It needs a Developer ID certificate and a `notarytool` profile, so it is for later. Run it before Sparkle signs the DMG.
 
 ## Controls
 

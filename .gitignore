@@ -8,3 +8,4 @@ DerivedData/
 *.xcuserdata/
 *.xcuserstate
 landing-page/
+vendor/
