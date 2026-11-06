@@ -3,8 +3,9 @@ import Carbon
 import Combine
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let preferences = Preferences()
+    private let licenseStore = LicenseStore()
     private let hotKeyManager = HotKeyManager()
 
     private var library: ClipLibrary?
@@ -13,6 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsController: SettingsWindowController?
     private var statusItem: NSStatusItem?
     private var pauseMenuItem: NSMenuItem?
+    private var buyMenuItem: NSMenuItem?
+    private var buySeparator: NSMenuItem?
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -27,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let panelController = PanelController(model: model, preferences: preferences, pasteService: pasteService)
         let settingsController = SettingsWindowController(
             preferences: preferences,
+            licenseStore: licenseStore,
             actions: .init(
                 clearHistory: { [weak self] in self?.confirmClearHistory() },
                 requestPastePermission: { pasteService.requestPermission() }
@@ -71,8 +75,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        panelController?.show()
+        openTray()
         return true
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls where url.scheme == "insert" && url.host == "activate" {
+            licenseStore.activate(url: url)
+            // A link can launch the app. Then this runs before applicationDidFinishLaunching makes the Settings window.
+            DispatchQueue.main.async { [weak self] in
+                self?.showLicense()
+            }
+        }
     }
 
     @objc func showSettings() {
@@ -80,11 +94,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsController?.show()
     }
 
+    @objc private func showLicense() {
+        panelController?.hide()
+        settingsController?.show(.license)
+    }
+
+    /// After the trial, the tray stays closed until the user activates a license. Capture continues, so no clip is lost.
+    private func openTray(toggle: Bool = false) {
+        guard licenseStore.state.opensTray else {
+            showLicense()
+            return
+        }
+        toggle ? panelController?.toggle() : panelController?.show()
+    }
+
     private func configureStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         let pauseItem = NSMenuItem(title: "", action: #selector(toggleCapture), keyEquivalent: "")
+        let buyItem = NSMenuItem(title: "", action: #selector(showLicense), keyEquivalent: "")
+        let buySeparator = NSMenuItem.separator()
         let menu = NSMenu()
+        menu.delegate = self
+        menu.addItem(buyItem)
+        menu.addItem(buySeparator)
         menu.addItem(NSMenuItem(title: "Show Insert", action: #selector(showPanel), keyEquivalent: ""))
         menu.addItem(pauseItem)
         menu.addItem(NSMenuItem(title: "Clear History…", action: #selector(confirmClearHistory), keyEquivalent: ""))
@@ -99,6 +132,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         statusItem = item
         pauseMenuItem = pauseItem
+        buyMenuItem = buyItem
+        self.buySeparator = buySeparator
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        let buyTitle: String?
+        switch licenseStore.state {
+        case .trial(let daysLeft):
+            buyTitle = daysLeft == 1 ? "Buy Insert (1 day left)…" : "Buy Insert (\(daysLeft) days left)…"
+        case .trialEnded:
+            buyTitle = "Buy Insert…"
+        case .licensed:
+            buyTitle = nil
+        }
+        buyMenuItem?.title = buyTitle ?? ""
+        buyMenuItem?.isHidden = buyTitle == nil
+        buySeparator?.isHidden = buyTitle == nil
     }
 
     private func showCaptureState(isPaused: Bool) {
@@ -110,7 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showPanel() {
-        panelController?.show()
+        openTray()
     }
 
     @objc private func toggleCapture() {
@@ -135,7 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func registerHotKey(_ shortcut: GlobalShortcut) {
         let status = hotKeyManager.register(shortcut: shortcut) { [weak self] in
-            self?.panelController?.toggle()
+            self?.openTray(toggle: true)
         }
         let isUnavailable = status != noErr
         if preferences.hotKeyIsUnavailable != isUnavailable {

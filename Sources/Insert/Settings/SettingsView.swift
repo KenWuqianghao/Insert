@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 enum SettingsPane: String, CaseIterable {
     case general
     case privacy
+    case license
 
     var title: String {
         switch self {
@@ -14,6 +15,8 @@ enum SettingsPane: String, CaseIterable {
             return "General"
         case .privacy:
             return "Privacy"
+        case .license:
+            return "License"
         }
     }
 
@@ -23,6 +26,8 @@ enum SettingsPane: String, CaseIterable {
             return "gearshape"
         case .privacy:
             return "hand.raised"
+        case .license:
+            return "key"
         }
     }
 
@@ -39,18 +44,23 @@ final class SettingsSelection: ObservableObject {
 @MainActor
 final class SettingsWindowController: NSObject, NSToolbarDelegate {
     private let preferences: Preferences
+    private let licenseStore: LicenseStore
     private let actions: SettingsView.Actions
     private let selection = SettingsSelection()
     private var window: NSWindow?
 
-    init(preferences: Preferences, actions: SettingsView.Actions) {
+    init(preferences: Preferences, licenseStore: LicenseStore, actions: SettingsView.Actions) {
         self.preferences = preferences
+        self.licenseStore = licenseStore
         self.actions = actions
     }
 
-    func show() {
+    func show(_ pane: SettingsPane? = nil) {
         let window = self.window ?? makeWindow()
         self.window = window
+        if let pane {
+            select(pane, in: window)
+        }
 
         // This also works when the Dock icon is hidden and the activation policy is accessory.
         NSApp.activate(ignoringOtherApps: true)
@@ -61,7 +71,7 @@ final class SettingsWindowController: NSObject, NSToolbarDelegate {
         // The hosting view sizes the window, so the window follows the height of the selected pane.
         let window = NSWindow(contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: true)
         window.contentView = NSHostingView(
-            rootView: SettingsView(selection: selection, preferences: preferences, actions: actions)
+            rootView: SettingsView(selection: selection, preferences: preferences, licenseStore: licenseStore, actions: actions)
         )
         window.isReleasedWhenClosed = false
         window.toolbarStyle = .preference
@@ -123,6 +133,7 @@ struct SettingsView: View {
 
     @ObservedObject var selection: SettingsSelection
     @ObservedObject var preferences: Preferences
+    let licenseStore: LicenseStore
     let actions: Actions
 
     var body: some View {
@@ -132,6 +143,8 @@ struct SettingsView: View {
                 GeneralSettings(preferences: preferences, actions: actions)
             case .privacy:
                 PrivacySettings(preferences: preferences, actions: actions)
+            case .license:
+                LicenseSettings(store: licenseStore)
             }
         }
         .formStyle(.grouped)
@@ -273,7 +286,7 @@ private struct PrivacySettings: View {
     }
 }
 
-private struct SettingsWarning: View {
+struct SettingsWarning: View {
     let text: String
 
     var body: some View {

@@ -82,6 +82,17 @@ enum AccessState: Equatable {
         }
     }
 
+    var summary: String {
+        switch self {
+        case .trial(let daysLeft):
+            return daysLeft == 1 ? "1 day left in your trial" : "\(daysLeft) days left in your trial"
+        case .trialEnded:
+            return "Your trial has ended"
+        case .licensed(let email):
+            return "Licensed to \(email)"
+        }
+    }
+
     var opensTray: Bool {
         if case .trialEnded = self { return false }
         return true
