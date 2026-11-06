@@ -30,5 +30,11 @@
 	<string>© 2026 Ken Wu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://insert-app.vercel.app/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>i9h98psLfp5y7x6QUi2aRY1W9cGwvlRQNoTJNZWlOik=</string>
 </dict>
 </plist>
