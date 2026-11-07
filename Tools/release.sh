@@ -11,6 +11,8 @@ RELEASES_REPO="KenWuqianghao/Insert"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLIST="$ROOT/Info.plist"
 DMG="$ROOT/build/Insert-Installer.dmg"
+# Sparkle downloads this copy of the DMG, so its GitHub download count is the update count.
+UPDATE_DMG="$ROOT/build/Insert-Update.dmg"
 APPCAST="${APPCAST:-$ROOT/../insert-site/appcast.xml}"
 
 VERSION="${1:-}"
@@ -23,7 +25,7 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ $# -gt 2 ]] || [[ $# -eq
 fi
 
 TAG="v$VERSION"
-DOWNLOAD_URL="https://github.com/$RELEASES_REPO/releases/download/$TAG/Insert-Installer.dmg"
+DOWNLOAD_URL="https://github.com/$RELEASES_REPO/releases/download/$TAG/Insert-Update.dmg"
 
 if ! $DRY_RUN; then
 	[[ -f "$APPCAST" ]] || { echo "No appcast at $APPCAST. Set APPCAST to the insert-site appcast.xml." >&2; exit 1; }
@@ -48,6 +50,7 @@ BUILD=$(( $(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST") + 1 ))
 MINIMUM_SYSTEM=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$PLIST")
 
 make -C "$ROOT" dmg
+cp "$DMG" "$UPDATE_DMG"
 SPARKLE_BIN="$ROOT/vendor/Sparkle-$(awk '/^SPARKLE_VERSION :=/ {print $3}' "$ROOT/Makefile")/bin"
 APP_PLIST="$ROOT/build/Insert.app/Contents/Info.plist"
 
@@ -64,9 +67,9 @@ ARCHS=$(lipo -archs "$ROOT/build/Insert.app/Contents/MacOS/Insert")
 [[ "$ARCHS" == "arm64" || "$ARCHS" == "x86_64" ]] || { echo "Unexpected architectures: $ARCHS" >&2; exit 1; }
 
 # sign_update reads the EdDSA private key from the login Keychain and prints: sparkle:edSignature="…" length="…"
-ENCLOSURE_ATTRIBUTES=$("$SPARKLE_BIN/sign_update" "$DMG")
+ENCLOSURE_ATTRIBUTES=$("$SPARKLE_BIN/sign_update" "$UPDATE_DMG")
 SIGNATURE=$(sed -E 's/.*sparkle:edSignature="([^"]+)".*/\1/' <<<"$ENCLOSURE_ATTRIBUTES")
-"$SPARKLE_BIN/sign_update" --verify "$DMG" "$SIGNATURE"
+"$SPARKLE_BIN/sign_update" --verify "$UPDATE_DMG" "$SIGNATURE"
 
 APPCAST_XML=$(cat <<EOF
 <?xml version="1.0" encoding="utf-8"?>
@@ -102,10 +105,10 @@ APPCAST_NEXT="$(mktemp "$APPCAST.XXXXXX")"
 echo "$APPCAST_XML" > "$APPCAST_NEXT"
 trap 'rm -f "$APPCAST_NEXT"' EXIT
 
-gh release create "$TAG" "$DMG" \
+gh release create "$TAG" "$DMG" "$UPDATE_DMG" \
 	--repo "$RELEASES_REPO" \
 	--title "Insert $VERSION" \
-	--notes "Insert $VERSION. Download Insert-Installer.dmg, open it, and drag Insert into Applications."
+	--notes "Insert $VERSION. Download Insert-Installer.dmg, open it, and drag Insert into Applications. Insert-Update.dmg is the same file for automatic updates."
 mv "$APPCAST_NEXT" "$APPCAST"
 
 echo "Released $TAG (build $BUILD). Next:"
