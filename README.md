@@ -66,8 +66,8 @@ The script does these steps:
 
 1. Sets `CFBundleShortVersionString` to the version and increases `CFBundleVersion` by 1 in `Info.plist`.
 2. Runs `make dmg`.
-3. Signs the DMG with Sparkle's `sign_update`.
-4. Creates the GitHub release `v1.2.0` with `Insert-Installer.dmg` on this repository.
+3. Copies the DMG to `Insert-Update.dmg` and signs the copy with Sparkle's `sign_update`.
+4. Creates the GitHub release `v1.2.0` on this repository with `Insert-Installer.dmg` and `Insert-Update.dmg`. The two files are the same. The appcast points to `Insert-Update.dmg`, so the download count of each file is separate for new installs and for updates.
 5. Writes the appcast to `$APPCAST`. The default is `../insert-site/appcast.xml`.
 
 `--dry-run` does steps 1 to 3, prints the appcast, and puts `Info.plist` back. It does not create the release.
@@ -75,6 +75,8 @@ The script does these steps:
 After a release, commit `Info.plist` here, then commit and deploy `appcast.xml` in insert-site.
 
 The Sparkle signing key is in the login Keychain, in the item `https://sparkle-project.org` (account `ed25519`). Back up this item. If you lose it, the installed copies of Insert cannot accept updates. To export a backup file, run `vendor/Sparkle-2.10.1/bin/generate_keys -x <file>`. Keep the file in a safe place. The first time `sign_update` runs, the Keychain asks for permission. Click **Always Allow**.
+
+To see the download counts of each release, run `Tools/downloads.sh`. It reads the counts of this repository and of the Windows port from GitHub.
 
 `make notarize` notarizes and staples the DMG. It needs a Developer ID certificate and a `notarytool` profile, so it is for later. Run it before Sparkle signs the DMG.
 
