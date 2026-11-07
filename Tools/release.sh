@@ -25,7 +25,7 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ $# -gt 2 ]] || [[ $# -eq
 fi
 
 TAG="v$VERSION"
-DOWNLOAD_URL="https://github.com/$RELEASES_REPO/releases/download/$TAG/Insert-Update.dmg"
+DOWNLOAD_URL="https://github.com/$RELEASES_REPO/releases/download/$TAG/$(basename "$UPDATE_DMG")"
 
 if ! $DRY_RUN; then
 	[[ -f "$APPCAST" ]] || { echo "No appcast at $APPCAST. Set APPCAST to the insert-site appcast.xml." >&2; exit 1; }
@@ -50,7 +50,6 @@ BUILD=$(( $(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST") + 1 ))
 MINIMUM_SYSTEM=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$PLIST")
 
 make -C "$ROOT" dmg
-cp "$DMG" "$UPDATE_DMG"
 SPARKLE_BIN="$ROOT/vendor/Sparkle-$(awk '/^SPARKLE_VERSION :=/ {print $3}' "$ROOT/Makefile")/bin"
 APP_PLIST="$ROOT/build/Insert.app/Contents/Info.plist"
 
@@ -66,6 +65,8 @@ fi
 ARCHS=$(lipo -archs "$ROOT/build/Insert.app/Contents/MacOS/Insert")
 [[ "$ARCHS" == "arm64" || "$ARCHS" == "x86_64" ]] || { echo "Unexpected architectures: $ARCHS" >&2; exit 1; }
 
+# The copy is made just before signing, so a later change to the DMG (such as stapling) must come first.
+cp "$DMG" "$UPDATE_DMG"
 # sign_update reads the EdDSA private key from the login Keychain and prints: sparkle:edSignature="…" length="…"
 ENCLOSURE_ATTRIBUTES=$("$SPARKLE_BIN/sign_update" "$UPDATE_DMG")
 SIGNATURE=$(sed -E 's/.*sparkle:edSignature="([^"]+)".*/\1/' <<<"$ENCLOSURE_ATTRIBUTES")

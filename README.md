@@ -66,7 +66,7 @@ The script does these steps:
 
 1. Sets `CFBundleShortVersionString` to the version and increases `CFBundleVersion` by 1 in `Info.plist`.
 2. Runs `make dmg`.
-3. Signs the DMG with Sparkle's `sign_update`.
+3. Copies the DMG to `Insert-Update.dmg` and signs the copy with Sparkle's `sign_update`.
 4. Creates the GitHub release `v1.2.0` on this repository with `Insert-Installer.dmg` and `Insert-Update.dmg`. The two files are the same. The appcast points to `Insert-Update.dmg`, so the download count of each file is separate for new installs and for updates.
 5. Writes the appcast to `$APPCAST`. The default is `../insert-site/appcast.xml`.
 
