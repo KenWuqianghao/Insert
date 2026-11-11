@@ -40,7 +40,10 @@ impl Change {
     }
 
     fn pinboards() -> Change {
-        Change { pinboards: true, ..Change::default() }
+        Change {
+            pinboards: true,
+            ..Change::default()
+        }
     }
 }
 
@@ -93,7 +96,9 @@ pub enum NameTarget {
     Clip(ClipId),
     Pinboard(PinboardId),
     /// From the "+" button (no clips) or from "Pin to > New Pinboard…" (the clips to pin).
-    NewPinboard { pinning: HashSet<ClipId> },
+    NewPinboard {
+        pinning: HashSet<ClipId>,
+    },
 }
 
 impl NameTarget {
@@ -135,12 +140,25 @@ impl Library {
     /// corrupt index, the files stay until the next start, so the user can still recover them.
     pub fn open(storage: Storage, history_limit: HistoryLimit) -> Opened {
         let loaded = storage.load_index();
-        let clips: Vec<Clip> = loaded.index.clips.into_iter().filter(|clip| storage.has_payload(clip.id)).collect();
+        let clips: Vec<Clip> = loaded
+            .index
+            .clips
+            .into_iter()
+            .filter(|clip| storage.has_payload(clip.id))
+            .collect();
         if loaded.corrupt_backup.is_none() {
             storage.remove_orphans(&clips.iter().map(|clip| clip.id).collect());
         }
-        let library = Library { clips, pinboards: loaded.index.pinboards, history_limit, storage };
-        Opened { library, corrupt_backup: loaded.corrupt_backup }
+        let library = Library {
+            clips,
+            pinboards: loaded.index.pinboards,
+            history_limit,
+            storage,
+        };
+        Opened {
+            library,
+            corrupt_backup: loaded.corrupt_backup,
+        }
     }
 
     pub fn clips(&self) -> &[Clip] {
@@ -182,9 +200,18 @@ impl Library {
 
     /// A clip with the same content hash moves to the front with the new time and source, and
     /// keeps its title and pinboard. Else the payload is written and a new clip is inserted.
-    pub fn insert(&mut self, capture: Capture, source: Option<SourceApp>, now: OffsetDateTime) -> io::Result<Change> {
+    pub fn insert(
+        &mut self,
+        capture: Capture,
+        source: Option<SourceApp>,
+        now: OffsetDateTime,
+    ) -> io::Result<Change> {
         let now = whole_seconds(now);
-        if let Some(existing) = self.clips.iter().find(|clip| clip.content_hash == capture.content_hash) {
+        if let Some(existing) = self
+            .clips
+            .iter()
+            .find(|clip| clip.content_hash == capture.content_hash)
+        {
             let id = existing.id;
             return Ok(self.update(|clips| {
                 move_to_front(clips, id, now, |clip| {
@@ -205,7 +232,8 @@ impl Library {
             content_hash: capture.content_hash,
             byte_count: capture.byte_count,
         };
-        self.storage.write_clip(clip.id, &capture.payload, capture.thumbnail_png.as_deref())?;
+        self.storage
+            .write_clip(clip.id, &capture.payload, capture.thumbnail_png.as_deref())?;
         let limit = self.history_limit;
         Ok(self.update(|clips| {
             clips.insert(0, clip);
@@ -250,7 +278,11 @@ impl Library {
 
     /// The new pinboard gets the first color that no pinboard uses. It goes at the end.
     pub fn add_pinboard(&mut self, name: String) -> (PinboardId, Change) {
-        let used: HashSet<PinboardColor> = self.pinboards.iter().map(|pinboard| pinboard.color).collect();
+        let used: HashSet<PinboardColor> = self
+            .pinboards
+            .iter()
+            .map(|pinboard| pinboard.color)
+            .collect();
         let color = PinboardColor::ALL
             .into_iter()
             .find(|color| !used.contains(color))
@@ -300,16 +332,30 @@ impl Library {
         match target {
             NameTarget::Clip(id) => {
                 let title = Some(name.to_owned()).filter(|name| !name.is_empty());
-                NameCommit { change: self.rename(*id, title), switch_to: None }
+                NameCommit {
+                    change: self.rename(*id, title),
+                    switch_to: None,
+                }
             }
-            NameTarget::Pinboard(_) | NameTarget::NewPinboard { .. } if name.is_empty() => NameCommit::default(),
-            NameTarget::Pinboard(id) => NameCommit { change: self.rename_pinboard(*id, name.to_owned()), switch_to: None },
+            NameTarget::Pinboard(_) | NameTarget::NewPinboard { .. } if name.is_empty() => {
+                NameCommit::default()
+            }
+            NameTarget::Pinboard(id) => NameCommit {
+                change: self.rename_pinboard(*id, name.to_owned()),
+                switch_to: None,
+            },
             NameTarget::NewPinboard { pinning } => {
                 let (id, change) = self.add_pinboard(name.to_owned());
                 if pinning.is_empty() {
-                    NameCommit { change, switch_to: Some(Scope::Pinboard(id)) }
+                    NameCommit {
+                        change,
+                        switch_to: Some(Scope::Pinboard(id)),
+                    }
                 } else {
-                    NameCommit { change: change.merge(self.set_pinboard(Some(id), pinning)), switch_to: None }
+                    NameCommit {
+                        change: change.merge(self.set_pinboard(Some(id), pinning)),
+                        switch_to: None,
+                    }
                 }
             }
         }
@@ -332,7 +378,13 @@ impl Library {
 
     /// History, then each pinboard in tab order.
     pub fn scopes(&self) -> Vec<Scope> {
-        std::iter::once(Scope::History).chain(self.pinboards.iter().map(|pinboard| Scope::Pinboard(pinboard.id))).collect()
+        std::iter::once(Scope::History)
+            .chain(
+                self.pinboards
+                    .iter()
+                    .map(|pinboard| Scope::Pinboard(pinboard.id)),
+            )
+            .collect()
     }
 
     /// The scope `offset` tabs away, wrapping around. An unknown scope counts as history.
@@ -357,12 +409,21 @@ impl Library {
             return Change::default();
         }
         let kept: HashSet<ClipId> = next.iter().map(|clip| clip.id).collect();
-        let removed: Vec<ClipId> = self.clips.iter().map(|clip| clip.id).filter(|id| !kept.contains(id)).collect();
+        let removed: Vec<ClipId> = self
+            .clips
+            .iter()
+            .map(|clip| clip.id)
+            .filter(|id| !kept.contains(id))
+            .collect();
         for id in &removed {
             self.storage.remove_files(*id);
         }
         self.clips = next;
-        Change { clips: true, pinboards: false, removed }
+        Change {
+            clips: true,
+            pinboards: false,
+            removed,
+        }
     }
 
     fn update_pinboard(&mut self, id: PinboardId, change: impl FnOnce(&mut Pinboard)) -> Change {
@@ -380,7 +441,12 @@ fn whole_seconds(time: OffsetDateTime) -> OffsetDateTime {
     time.replace_nanosecond(0).expect("0 is a valid nanosecond")
 }
 
-fn move_to_front(clips: &mut Vec<Clip>, id: ClipId, now: OffsetDateTime, adjust: impl FnOnce(&mut Clip)) {
+fn move_to_front(
+    clips: &mut Vec<Clip>,
+    id: ClipId,
+    now: OffsetDateTime,
+    adjust: impl FnOnce(&mut Clip),
+) {
     if let Some(index) = clips.iter().position(|clip| clip.id == id) {
         let mut clip = clips.remove(index);
         clip.created_at = now;
@@ -418,7 +484,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let storage = Storage::new(dir.path().to_owned());
         let library = Library::open(storage.clone(), limit).library;
-        Fixture { _dir: dir, storage, library }
+        Fixture {
+            _dir: dir,
+            storage,
+            library,
+        }
     }
 
     fn t(seconds: i64) -> OffsetDateTime {
@@ -430,7 +500,10 @@ mod tests {
     }
 
     fn app(name: &str) -> Option<SourceApp> {
-        Some(SourceApp { id: name.to_lowercase(), name: name.into() })
+        Some(SourceApp {
+            id: name.to_lowercase(),
+            name: name.into(),
+        })
     }
 
     fn insert(library: &mut Library, value: &str) -> ClipId {
@@ -444,14 +517,24 @@ mod tests {
 
     #[test]
     fn insert_writes_files_and_puts_the_clip_first() {
-        let Fixture { storage, mut library, .. } = fixture(HistoryLimit::Clips100);
+        let Fixture {
+            storage,
+            mut library,
+            ..
+        } = fixture(HistoryLimit::Clips100);
         let first = insert(&mut library, "a");
         let change = library.insert(text("b"), app("Kate"), t(5)).unwrap();
         assert!(change.clips && change.needs_save());
         let second = library.clips()[0].id;
-        assert_eq!(library.clips().iter().map(|c| c.id).collect::<Vec<_>>(), [second, first]);
+        assert_eq!(
+            library.clips().iter().map(|c| c.id).collect::<Vec<_>>(),
+            [second, first]
+        );
         assert!(storage.has_payload(second));
-        assert_eq!(library.payload(second).unwrap().get(UTF8_TEXT), Some(b"b".as_slice()));
+        assert_eq!(
+            library.payload(second).unwrap().get(UTF8_TEXT),
+            Some(b"b".as_slice())
+        );
     }
 
     #[test]
@@ -478,7 +561,11 @@ mod tests {
 
     #[test]
     fn pruning_keeps_pinned_clips_and_the_newest_unpinned() {
-        let Fixture { storage, mut library, .. } = fixture(HistoryLimit::Clips100);
+        let Fixture {
+            storage,
+            mut library,
+            ..
+        } = fixture(HistoryLimit::Clips100);
         let (board, _) = library.add_pinboard("Keep".into());
         let mut pinned = HashSet::new();
         for index in 0..10 {
@@ -499,7 +586,9 @@ mod tests {
     fn unpin_and_pinboard_delete_prune_at_once() {
         let Fixture { mut library, .. } = fixture(HistoryLimit::Clips100);
         let (board, _) = library.add_pinboard("Board".into());
-        let pinned: HashSet<ClipId> = (0..5).map(|i| insert(&mut library, &format!("p{i}"))).collect();
+        let pinned: HashSet<ClipId> = (0..5)
+            .map(|i| insert(&mut library, &format!("p{i}")))
+            .collect();
         let _ = library.set_pinboard(Some(board), &pinned);
         for index in 0..100 {
             insert(&mut library, &format!("h{index}"));
@@ -515,8 +604,14 @@ mod tests {
         assert!(change.pinboards && change.clips);
         assert_eq!(change.removed.len(), 4);
         assert_eq!(library.clips().len(), 100);
-        assert!(library.clips().iter().all(|clip| clip.pinboard_id.is_none()));
-        assert_eq!(library.resolve_scope(Scope::Pinboard(board)), Scope::History);
+        assert!(library
+            .clips()
+            .iter()
+            .all(|clip| clip.pinboard_id.is_none()));
+        assert_eq!(
+            library.resolve_scope(Scope::Pinboard(board)),
+            Scope::History
+        );
     }
 
     #[test]
@@ -532,7 +627,11 @@ mod tests {
 
     #[test]
     fn delete_removes_pinned_clips_and_files() {
-        let Fixture { storage, mut library, .. } = fixture(HistoryLimit::Clips100);
+        let Fixture {
+            storage,
+            mut library,
+            ..
+        } = fixture(HistoryLimit::Clips100);
         let (board, _) = library.add_pinboard("B".into());
         let a = insert(&mut library, "a");
         let b = insert(&mut library, "b");
@@ -552,7 +651,10 @@ mod tests {
         let _ = library.set_pinboard(Some(board), &HashSet::from([pinned]));
         insert(&mut library, "loose");
         let _ = library.clear_history();
-        assert_eq!(library.clips().iter().map(|c| c.id).collect::<Vec<_>>(), [pinned]);
+        assert_eq!(
+            library.clips().iter().map(|c| c.id).collect::<Vec<_>>(),
+            [pinned]
+        );
     }
 
     #[test]
@@ -589,12 +691,17 @@ mod tests {
         let Fixture { mut library, .. } = fixture(HistoryLimit::Clips100);
         let clip = insert(&mut library, "x");
         let _ = library.commit_name(&NameTarget::Clip(clip), "  Title \n");
-        assert_eq!(library.clip(clip).unwrap().custom_title.as_deref(), Some("Title"));
+        assert_eq!(
+            library.clip(clip).unwrap().custom_title.as_deref(),
+            Some("Title")
+        );
         assert_eq!(library.current_name(&NameTarget::Clip(clip)), "Title");
         let _ = library.commit_name(&NameTarget::Clip(clip), "  ");
         assert_eq!(library.clip(clip).unwrap().custom_title, None);
 
-        let empty = NameTarget::NewPinboard { pinning: HashSet::new() };
+        let empty = NameTarget::NewPinboard {
+            pinning: HashSet::new(),
+        };
         assert_eq!(library.commit_name(&empty, " "), NameCommit::default());
         assert!(library.pinboards().is_empty());
 
@@ -607,10 +714,15 @@ mod tests {
         let _ = library.commit_name(&NameTarget::Pinboard(board), "Home");
         assert_eq!(library.pinboards()[0].name, "Home");
 
-        let pinning = NameTarget::NewPinboard { pinning: HashSet::from([clip]) };
+        let pinning = NameTarget::NewPinboard {
+            pinning: HashSet::from([clip]),
+        };
         let commit = library.commit_name(&pinning, "Pins");
         assert_eq!(commit.switch_to, None);
-        assert_eq!(library.clip(clip).unwrap().pinboard_id, Some(library.pinboards()[1].id));
+        assert_eq!(
+            library.clip(clip).unwrap().pinboard_id,
+            Some(library.pinboards()[1].id)
+        );
     }
 
     #[test]
@@ -621,19 +733,39 @@ mod tests {
         let (board, _) = library.add_pinboard("Food".into());
         let _ = library.set_pinboard(Some(board), &HashSet::from([apple]));
 
-        assert_eq!(ids(&library.visible(Scope::History, None, "")), [apple, link]);
-        assert_eq!(ids(&library.visible(Scope::Pinboard(board), None, "")), [apple]);
-        assert_eq!(ids(&library.visible(Scope::History, Some(ClipKind::Link), "")), [link]);
-        assert_eq!(ids(&library.visible(Scope::History, None, "  apple\n")), [apple]);
+        assert_eq!(
+            ids(&library.visible(Scope::History, None, "")),
+            [apple, link]
+        );
+        assert_eq!(
+            ids(&library.visible(Scope::Pinboard(board), None, "")),
+            [apple]
+        );
+        assert_eq!(
+            ids(&library.visible(Scope::History, Some(ClipKind::Link), "")),
+            [link]
+        );
+        assert_eq!(
+            ids(&library.visible(Scope::History, None, "  apple\n")),
+            [apple]
+        );
         assert_eq!(ids(&library.visible(Scope::History, None, "link")), [link]);
-        assert!(library.visible(Scope::History, Some(ClipKind::Image), "").is_empty());
+        assert!(library
+            .visible(Scope::History, Some(ClipKind::Image), "")
+            .is_empty());
     }
 
     #[test]
     fn empty_states_in_order() {
         let board = Scope::Pinboard(PinboardId::new());
-        assert_eq!(empty_state(Scope::History, None, "x"), EmptyState::NoMatches);
-        assert_eq!(empty_state(board, Some(ClipKind::Text), ""), EmptyState::NoMatches);
+        assert_eq!(
+            empty_state(Scope::History, None, "x"),
+            EmptyState::NoMatches
+        );
+        assert_eq!(
+            empty_state(board, Some(ClipKind::Text), ""),
+            EmptyState::NoMatches
+        );
         assert_eq!(empty_state(Scope::History, None, "  "), EmptyState::NoClips);
         assert_eq!(empty_state(board, None, ""), EmptyState::EmptyPinboard);
     }
@@ -650,7 +782,11 @@ mod tests {
 
     #[test]
     fn reopen_restores_clips_and_drops_clips_without_payload() {
-        let Fixture { _dir, storage, mut library } = fixture(HistoryLimit::Clips100);
+        let Fixture {
+            _dir,
+            storage,
+            mut library,
+        } = fixture(HistoryLimit::Clips100);
         let (board, _) = library.add_pinboard("Work".into());
         let kept = insert(&mut library, "kept");
         let lost = insert(&mut library, "lost");
@@ -661,14 +797,21 @@ mod tests {
         let reopened = Library::open(storage.clone(), HistoryLimit::Clips100);
         assert_eq!(reopened.corrupt_backup, None);
         let library = reopened.library;
-        assert_eq!(library.clips().iter().map(|c| c.id).collect::<Vec<_>>(), [kept]);
+        assert_eq!(
+            library.clips().iter().map(|c| c.id).collect::<Vec<_>>(),
+            [kept]
+        );
         assert_eq!(library.clip(kept).unwrap().pinboard_id, Some(board));
         assert_eq!(library.pinboards()[0].name, "Work");
     }
 
     #[test]
     fn corrupt_index_opens_an_empty_library() {
-        let Fixture { _dir, storage, mut library } = fixture(HistoryLimit::Clips100);
+        let Fixture {
+            _dir,
+            storage,
+            mut library,
+        } = fixture(HistoryLimit::Clips100);
         let id = insert(&mut library, "x");
         std::fs::write(storage.index_path(), b"\0garbage").unwrap();
 

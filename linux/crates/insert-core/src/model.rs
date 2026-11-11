@@ -80,14 +80,23 @@ impl ColorValue {
             return None;
         }
         let digits = match digits.len() {
-            3 => digits.chars().flat_map(|c| [c, c]).chain("FF".chars()).collect(),
+            3 => digits
+                .chars()
+                .flat_map(|c| [c, c])
+                .chain("FF".chars())
+                .collect(),
             6 => format!("{digits}FF"),
             8 => digits.to_owned(),
             _ => return None,
         };
         let rgba = u32::from_str_radix(&digits, 16).ok()?;
         let channel = |shift: u32| f64::from((rgba >> shift) & 0xFF) / 255.0;
-        Some(Self { red: channel(24), green: channel(16), blue: channel(8), alpha: channel(0) })
+        Some(Self {
+            red: channel(24),
+            green: channel(16),
+            blue: channel(8),
+            alpha: channel(0),
+        })
     }
 
     pub fn rgb8(&self) -> [u8; 3] {
@@ -134,7 +143,10 @@ impl TextSnippet {
             }
             count += 1;
         }
-        Self { text: full_text[..end].to_owned(), character_count: count }
+        Self {
+            text: full_text[..end].to_owned(),
+            character_count: count,
+        }
     }
 
     pub fn first_line(&self) -> Option<&str> {
@@ -146,7 +158,10 @@ impl TextSnippet {
 }
 
 fn is_newline(c: char) -> bool {
-    matches!(c, '\n' | '\r' | '\u{0B}' | '\u{0C}' | '\u{85}' | '\u{2028}' | '\u{2029}')
+    matches!(
+        c,
+        '\n' | '\r' | '\u{0B}' | '\u{0C}' | '\u{85}' | '\u{2028}' | '\u{2029}'
+    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -241,10 +256,14 @@ impl ClipContent {
 
     pub fn display_title(&self) -> String {
         match self {
-            Self::Text(snippet) | Self::RichText(snippet) => {
-                snippet.first_line().unwrap_or(self.kind().name()).to_owned()
-            }
-            Self::Link { url, title } => title.clone().or_else(|| url_host(url)).unwrap_or_else(|| url.clone()),
+            Self::Text(snippet) | Self::RichText(snippet) => snippet
+                .first_line()
+                .unwrap_or(self.kind().name())
+                .to_owned(),
+            Self::Link { url, title } => title
+                .clone()
+                .or_else(|| url_host(url))
+                .unwrap_or_else(|| url.clone()),
             Self::Files(uris) => match uris.as_slice() {
                 [uri] => file_name(uri),
                 _ => format!("{} Files", uris.len()),
@@ -260,9 +279,16 @@ impl ClipContent {
     pub fn search_text(&self) -> String {
         match self {
             Self::Text(snippet) | Self::RichText(snippet) => snippet.text.clone(),
-            Self::Link { url, title: Some(title) } => format!("{title} {url}"),
+            Self::Link {
+                url,
+                title: Some(title),
+            } => format!("{title} {url}"),
             Self::Link { url, title: None } => url.clone(),
-            Self::Files(uris) => uris.iter().map(|uri| file_path(uri)).collect::<Vec<_>>().join(" "),
+            Self::Files(uris) => uris
+                .iter()
+                .map(|uri| file_path(uri))
+                .collect::<Vec<_>>()
+                .join(" "),
             Self::Color(color) => color.hex(),
             Self::Image(_) | Self::Pdf | Self::Media | Self::Data => self.kind().name().to_owned(),
         }
@@ -270,7 +296,9 @@ impl ClipContent {
 
     pub fn footer(&self, byte_count: u64) -> String {
         match self {
-            Self::Text(snippet) | Self::RichText(snippet) => counted(snippet.character_count, "character"),
+            Self::Text(snippet) | Self::RichText(snippet) => {
+                counted(snippet.character_count, "character")
+            }
             Self::Link { url, .. } => counted(grapheme_count(url), "character"),
             Self::Image(size) => format!(
                 "{} \u{00D7} {}",
@@ -294,7 +322,10 @@ fn counted(count: usize, noun: &str) -> String {
 
 fn url_host(url: &str) -> Option<String> {
     let parsed = url::Url::parse(url).ok()?;
-    parsed.host_str().filter(|host| !host.is_empty()).map(str::to_owned)
+    parsed
+        .host_str()
+        .filter(|host| !host.is_empty())
+        .map(str::to_owned)
 }
 
 /// The decoded path of a `file://` URI, or the URI itself if it does not parse.
@@ -309,7 +340,12 @@ pub fn file_path(uri: &str) -> String {
 pub fn file_name(uri: &str) -> String {
     let path = file_path(uri);
     let trimmed = path.trim_end_matches('/');
-    trimmed.rsplit('/').next().filter(|name| !name.is_empty()).unwrap_or(trimmed).to_owned()
+    trimmed
+        .rsplit('/')
+        .next()
+        .filter(|name| !name.is_empty())
+        .unwrap_or(trimmed)
+        .to_owned()
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -344,7 +380,10 @@ impl Clip {
         let contains = |text: &str| text.to_lowercase().contains(&query);
         contains(&self.content.search_text())
             || self.custom_title.as_deref().is_some_and(contains)
-            || self.source.as_ref().is_some_and(|source| contains(&source.name))
+            || self
+                .source
+                .as_ref()
+                .is_some_and(|source| contains(&source.name))
             || contains(self.kind().name())
     }
 
@@ -361,7 +400,9 @@ impl Clip {
     }
 
     pub fn preview_title(&self) -> String {
-        self.custom_title.clone().unwrap_or_else(|| self.content.display_title())
+        self.custom_title
+            .clone()
+            .unwrap_or_else(|| self.content.display_title())
     }
 
     pub fn preview_subtitle(&self) -> String {
@@ -396,7 +437,11 @@ pub struct Rgb {
 
 impl Rgb {
     const fn hex(value: u32) -> Self {
-        Self { r: (value >> 16) as u8, g: (value >> 8) as u8, b: value as u8 }
+        Self {
+            r: (value >> 16) as u8,
+            g: (value >> 8) as u8,
+            b: value as u8,
+        }
     }
 
     pub fn to_hex(self) -> String {
@@ -461,7 +506,10 @@ mod tests {
         let short = ColorValue::from_hex("#f80").unwrap();
         assert_eq!(short.hex(), "#FF8800");
         assert_eq!(ColorValue::from_hex("#336699").unwrap().alpha, 1.0);
-        assert_eq!(ColorValue::from_hex("#33669980").unwrap().hex(), "#33669980");
+        assert_eq!(
+            ColorValue::from_hex("#33669980").unwrap().hex(),
+            "#33669980"
+        );
         for bad in ["336699", "#3369", "#33669", "#GG0000", "#"] {
             assert_eq!(ColorValue::from_hex(bad), None, "{bad}");
         }
@@ -493,7 +541,10 @@ mod tests {
         Clip {
             id: ClipId::new(),
             created_at: OffsetDateTime::UNIX_EPOCH,
-            source: Some(SourceApp { id: "org.kde.kate".into(), name: "Kate".into() }),
+            source: Some(SourceApp {
+                id: "org.kde.kate".into(),
+                name: "Kate".into(),
+            }),
             content,
             custom_title: None,
             pinboard_id: None,
@@ -504,10 +555,16 @@ mod tests {
 
     #[test]
     fn display_strings_per_kind() {
-        let link = ClipContent::Link { url: "https://example.com/a".into(), title: None };
+        let link = ClipContent::Link {
+            url: "https://example.com/a".into(),
+            title: None,
+        };
         assert_eq!(link.display_title(), "example.com");
         assert_eq!(link.footer(0), "21 characters");
-        let titled = ClipContent::Link { url: "https://example.com".into(), title: Some("Ex".into()) };
+        let titled = ClipContent::Link {
+            url: "https://example.com".into(),
+            title: Some("Ex".into()),
+        };
         assert_eq!(titled.display_title(), "Ex");
         assert_eq!(titled.search_text(), "Ex https://example.com");
 
@@ -519,7 +576,10 @@ mod tests {
         assert_eq!(two.display_title(), "2 Files");
         assert_eq!(two.footer(0), "2 files");
 
-        let image = ClipContent::Image(PixelSize { width: 2_560, height: 1_440 });
+        let image = ClipContent::Image(PixelSize {
+            width: 2_560,
+            height: 1_440,
+        });
         assert_eq!(image.footer(0), "2,560 \u{00D7} 1,440");
         assert_eq!(image.search_text(), "Image");
 
@@ -533,7 +593,10 @@ mod tests {
 
         let text = ClipContent::Text(TextSnippet::new("x"));
         assert_eq!(text.footer(0), "1 character");
-        assert_eq!(ClipContent::Text(TextSnippet::new("  \n")).display_title(), "Text");
+        assert_eq!(
+            ClipContent::Text(TextSnippet::new("  \n")).display_title(),
+            "Text"
+        );
     }
 
     #[test]

@@ -25,7 +25,9 @@ pub struct Paths {
 
 impl Paths {
     pub fn from_env() -> Self {
-        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_default();
         let base = |variable: &str, fallback: &str| {
             std::env::var_os(variable)
                 .map(PathBuf::from)
@@ -42,7 +44,11 @@ impl Paths {
 
     /// All three directories under one root, for tests and for a private profile.
     pub fn under(root: &Path) -> Self {
-        Self { data_dir: root.join("data"), config_dir: root.join("config"), state_dir: root.join("state") }
+        Self {
+            data_dir: root.join("data"),
+            config_dir: root.join("config"),
+            state_dir: root.join("state"),
+        }
     }
 
     pub fn preferences_file(&self) -> PathBuf {
@@ -104,12 +110,22 @@ impl Storage {
     /// `index.json.corrupt-<unix time>` so that the next save cannot destroy it.
     pub fn load_index(&self) -> LoadedIndex {
         let path = self.index_path();
-        let empty = |corrupt_backup| LoadedIndex { index: LibraryIndex::default(), corrupt_backup };
-        let Ok(bytes) = fs::read(&path) else { return empty(None) };
+        let empty = |corrupt_backup| LoadedIndex {
+            index: LibraryIndex::default(),
+            corrupt_backup,
+        };
+        let Ok(bytes) = fs::read(&path) else {
+            return empty(None);
+        };
         match serde_json::from_slice(&bytes) {
-            Ok(index) => LoadedIndex { index, corrupt_backup: None },
+            Ok(index) => LoadedIndex {
+                index,
+                corrupt_backup: None,
+            },
             Err(_) => {
-                let seconds = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs());
+                let seconds = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_or(0, |d| d.as_secs());
                 let backup = self.root.join(format!("index.json.corrupt-{seconds}"));
                 empty(fs::rename(&path, &backup).ok().map(|()| backup))
             }
@@ -122,7 +138,12 @@ impl Storage {
     }
 
     /// Writes the payload directory and the thumbnail. On failure, nothing is left behind.
-    pub fn write_clip(&self, id: ClipId, payload: &MimeMap, thumbnail_png: Option<&[u8]>) -> io::Result<()> {
+    pub fn write_clip(
+        &self,
+        id: ClipId,
+        payload: &MimeMap,
+        thumbnail_png: Option<&[u8]>,
+    ) -> io::Result<()> {
         let result = self.try_write_clip(id, payload, thumbnail_png);
         if result.is_err() {
             self.remove_files(id);
@@ -130,7 +151,12 @@ impl Storage {
         result
     }
 
-    fn try_write_clip(&self, id: ClipId, payload: &MimeMap, thumbnail_png: Option<&[u8]>) -> io::Result<()> {
+    fn try_write_clip(
+        &self,
+        id: ClipId,
+        payload: &MimeMap,
+        thumbnail_png: Option<&[u8]>,
+    ) -> io::Result<()> {
         let partial = self.payloads_dir().join(format!(".{id}.partial"));
         if partial.exists() {
             fs::remove_dir_all(&partial)?;
@@ -157,7 +183,9 @@ impl Storage {
         let mut entries = Vec::new();
         for entry in fs::read_dir(self.payload_dir(id))? {
             let entry = entry?;
-            let Some(mime) = entry.file_name().to_str().and_then(decode_file_name) else { continue };
+            let Some(mime) = entry.file_name().to_str().and_then(decode_file_name) else {
+                continue;
+            };
             entries.push((mime, fs::read(entry.path())?));
         }
         entries.sort_by(|a, b| a.0.cmp(&b.0));
@@ -176,9 +204,12 @@ impl Storage {
     /// Deletes payloads and thumbnails that no kept clip owns. A crash between a payload write
     /// and an index save leaves such files.
     pub fn remove_orphans(&self, keep: &HashSet<ClipId>) {
-        let owned = |name: &str| Uuid::parse_str(name).is_ok_and(|uuid| keep.contains(&ClipId(uuid)));
+        let owned =
+            |name: &str| Uuid::parse_str(name).is_ok_and(|uuid| keep.contains(&ClipId(uuid)));
         for (dir, suffix) in [(self.payloads_dir(), ""), (self.thumbnails_dir(), ".png")] {
-            let Ok(entries) = fs::read_dir(&dir) else { continue };
+            let Ok(entries) = fs::read_dir(&dir) else {
+                continue;
+            };
             for entry in entries.flatten() {
                 let name = entry.file_name();
                 let name = name.to_string_lossy();
@@ -186,7 +217,11 @@ impl Storage {
                     continue;
                 }
                 let path = entry.path();
-                let _ = if path.is_dir() { fs::remove_dir_all(&path) } else { fs::remove_file(&path) };
+                let _ = if path.is_dir() {
+                    fs::remove_dir_all(&path)
+                } else {
+                    fs::remove_file(&path)
+                };
             }
         }
     }
@@ -194,9 +229,13 @@ impl Storage {
 
 /// Writes a temp file next to `path`, flushes it, and renames it over `path`.
 pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let dir = path.parent().ok_or_else(|| io::Error::other("path has no parent"))?;
+    let dir = path
+        .parent()
+        .ok_or_else(|| io::Error::other("path has no parent"))?;
     fs::create_dir_all(dir)?;
-    let name = path.file_name().ok_or_else(|| io::Error::other("path has no file name"))?;
+    let name = path
+        .file_name()
+        .ok_or_else(|| io::Error::other("path has no file name"))?;
     let temp = dir.join(format!(".{}.tmp", name.to_string_lossy()));
     let mut file = fs::File::create(&temp)?;
     file.write_all(bytes)?;
@@ -254,7 +293,12 @@ mod tests {
 
     #[test]
     fn file_names_round_trip_mime_types() {
-        for mime in ["text/plain;charset=utf-8", "UTF8_STRING", "image/svg+xml", "x-special/gnome-copied-files"] {
+        for mime in [
+            "text/plain;charset=utf-8",
+            "UTF8_STRING",
+            "image/svg+xml",
+            "x-special/gnome-copied-files",
+        ] {
             let name = encode_file_name(mime);
             assert!(!name.contains('/'), "{name}");
             assert_eq!(decode_file_name(&name).as_deref(), Some(mime));
@@ -267,12 +311,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let storage = Storage::new(dir.path().to_owned());
         let clip = clip();
-        let payload = MimeMap(vec![("text/html".into(), b"<b>x</b>".to_vec()), ("text/plain".into(), b"x".to_vec())]);
+        let payload = MimeMap(vec![
+            ("text/html".into(), b"<b>x</b>".to_vec()),
+            ("text/plain".into(), b"x".to_vec()),
+        ]);
         storage.write_clip(clip.id, &payload, Some(b"png")).unwrap();
-        storage.save_index(std::slice::from_ref(&clip), &[]).unwrap();
+        storage
+            .save_index(std::slice::from_ref(&clip), &[])
+            .unwrap();
 
         let loaded = storage.load_index();
-        assert_eq!(loaded.index.clips, [clip.clone()]);
+        assert_eq!(loaded.index.clips, std::slice::from_ref(&clip));
         assert_eq!(loaded.corrupt_backup, None);
         assert_eq!(storage.load_payload(clip.id).unwrap(), payload);
         assert_eq!(fs::read(storage.thumbnail_path(clip.id)).unwrap(), b"png");
@@ -295,7 +344,11 @@ mod tests {
         let loaded = storage.load_index();
         assert_eq!(loaded.index, LibraryIndex::default());
         let backup = loaded.corrupt_backup.expect("backup path");
-        assert!(backup.file_name().unwrap().to_string_lossy().starts_with("index.json.corrupt-"));
+        assert!(backup
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("index.json.corrupt-"));
         assert_eq!(fs::read(&backup).unwrap(), b"{not json");
         assert!(!storage.index_path().exists());
     }
@@ -323,6 +376,8 @@ mod tests {
     fn xdg_paths_end_in_the_app_dir() {
         let paths = Paths::from_env();
         assert!(paths.data_dir.ends_with("insert"));
-        assert!(paths.preferences_file().ends_with("insert/preferences.json"));
+        assert!(paths
+            .preferences_file()
+            .ends_with("insert/preferences.json"));
     }
 }

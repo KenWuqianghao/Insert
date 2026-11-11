@@ -4,8 +4,9 @@ use image::{DynamicImage, ImageDecoder, ImageReader};
 use sha2::{Digest, Sha256};
 
 use crate::mime::{
-    image_rank, is_media, is_plain_stored, is_privacy_marker, is_rich_text, is_volatile, text_source, MimeMap,
-    TextEncoding, COLOR, GNOME_COPIED_FILES, HTML, KDE_PASSWORD_HINT, PDF, UTF8_TEXT,
+    image_rank, is_media, is_plain_stored, is_privacy_marker, is_rich_text, is_volatile,
+    text_source, MimeMap, TextEncoding, COLOR, GNOME_COPIED_FILES, HTML, KDE_PASSWORD_HINT, PDF,
+    UTF8_TEXT,
 };
 use crate::model::{ClipContent, ColorValue, ContentHash, PixelSize, TextSnippet};
 
@@ -106,7 +107,11 @@ fn decode_text(data: &[u8], encoding: TextEncoding) -> Option<String> {
 /// A stored "cut" would move the files again on each paste from the history.
 fn as_copy_operation(data: Vec<u8>) -> Vec<u8> {
     match data.strip_prefix(b"cut") {
-        Some(rest) if rest.first().is_none_or(|byte| *byte == b'\n' || *byte == b'\r') => {
+        Some(rest)
+            if rest
+                .first()
+                .is_none_or(|byte| *byte == b'\n' || *byte == b'\r') =>
+        {
             [b"copy".as_slice(), rest].concat()
         }
         _ => data,
@@ -115,7 +120,11 @@ fn as_copy_operation(data: Vec<u8>) -> Vec<u8> {
 
 /// SHA-256 over the non-volatile entries in MIME name order: name, 0x1E, length as u64 LE, data.
 pub fn content_hash(payload: &MimeMap) -> ContentHash {
-    let mut entries: Vec<&(String, Vec<u8>)> = payload.0.iter().filter(|(mime, _)| !is_volatile(mime)).collect();
+    let mut entries: Vec<&(String, Vec<u8>)> = payload
+        .0
+        .iter()
+        .filter(|(mime, _)| !is_volatile(mime))
+        .collect();
     entries.sort_by(|a, b| a.0.cmp(&b.0));
     let mut hasher = Sha256::new();
     for (mime, data) in entries {
@@ -124,7 +133,13 @@ pub fn content_hash(payload: &MimeMap) -> ContentHash {
         hasher.update((data.len() as u64).to_le_bytes());
         hasher.update(data);
     }
-    ContentHash(hasher.finalize().iter().map(|byte| format!("{byte:02x}")).collect())
+    ContentHash(
+        hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect(),
+    )
 }
 
 /// Spec 2.3: the first rule that matches wins.
@@ -146,7 +161,9 @@ fn classify_payload(payload: &MimeMap) -> Result<(ClipContent, Option<Vec<u8>>),
         return Ok((ClipContent::Color(color), None));
     }
 
-    let text = payload.get(UTF8_TEXT).and_then(|data| std::str::from_utf8(data).ok());
+    let text = payload
+        .get(UTF8_TEXT)
+        .and_then(|data| std::str::from_utf8(data).ok());
     let has_text = text.is_some_and(|text| !text.trim().is_empty());
 
     if let Some((_, rtf)) = payload.0.iter().find(|(mime, _)| is_rich_text(mime)) {
@@ -154,13 +171,21 @@ fn classify_payload(payload: &MimeMap) -> Result<(ClipContent, Option<Vec<u8>>),
             Some(text) if has_text => Some(text.to_owned()),
             _ => Some(rtf_to_text(rtf)).filter(|text| !text.trim().is_empty()),
         };
-        return plain.map(|text| (ClipContent::RichText(TextSnippet::new(&text)), None)).ok_or(Skip::Blank);
+        return plain
+            .map(|text| (ClipContent::RichText(TextSnippet::new(&text)), None))
+            .ok_or(Skip::Blank);
     }
 
     if let Some(text) = text.filter(|_| has_text) {
         let trimmed = text.trim();
         if is_web_url(trimmed) {
-            return Ok((ClipContent::Link { url: trimmed.to_owned(), title: None }, None));
+            return Ok((
+                ClipContent::Link {
+                    url: trimmed.to_owned(),
+                    title: None,
+                },
+                None,
+            ));
         }
         if let Some(color) = ColorValue::from_hex(trimmed) {
             return Ok((ClipContent::Color(color), None));
@@ -188,7 +213,11 @@ fn classify_payload(payload: &MimeMap) -> Result<(ClipContent, Option<Vec<u8>>),
 
 /// The original pixel size and a PNG with its longest side at most `THUMBNAIL_MAX_SIDE`.
 fn thumbnail(data: &[u8]) -> Option<(PixelSize, Vec<u8>)> {
-    let mut decoder = ImageReader::new(Cursor::new(data)).with_guessed_format().ok()?.into_decoder().ok()?;
+    let mut decoder = ImageReader::new(Cursor::new(data))
+        .with_guessed_format()
+        .ok()?
+        .into_decoder()
+        .ok()?;
     let (width, height) = decoder.dimensions();
     if width == 0 || height == 0 {
         return None;
@@ -199,19 +228,34 @@ fn thumbnail(data: &[u8]) -> Option<(PixelSize, Vec<u8>)> {
         image.apply_orientation(orientation);
     }
     if image.width().max(image.height()) > THUMBNAIL_MAX_SIDE {
-        image = image.resize(THUMBNAIL_MAX_SIDE, THUMBNAIL_MAX_SIDE, image::imageops::FilterType::Triangle);
+        image = image.resize(
+            THUMBNAIL_MAX_SIDE,
+            THUMBNAIL_MAX_SIDE,
+            image::imageops::FilterType::Triangle,
+        );
     }
     let mut png = Vec::new();
-    image.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+    image
+        .write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png)
+        .ok()?;
     Some((PixelSize { width, height }, png))
 }
 
 /// GTK writes `application/x-color` as four u16 values: red, green, blue, alpha.
 fn gtk_color(data: &[u8]) -> Option<ColorValue> {
-    let channels: Vec<f64> =
-        data.chunks_exact(2).map(|pair| f64::from(u16::from_le_bytes([pair[0], pair[1]])) / 65_535.0).collect();
+    let channels: Vec<f64> = data
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| f64::from(u16::from_le_bytes([pair[0], pair[1]])) / 65_535.0)
+        .collect();
     match channels.as_slice() {
-        [red, green, blue, alpha] => Some(ColorValue { red: *red, green: *green, blue: *blue, alpha: *alpha }),
+        [red, green, blue, alpha] => Some(ColorValue {
+            red: *red,
+            green: *green,
+            blue: *blue,
+            alpha: *alpha,
+        }),
         _ => None,
     }
 }
@@ -221,7 +265,8 @@ fn is_web_url(text: &str) -> bool {
         return false;
     }
     url::Url::parse(text).is_ok_and(|url| {
-        matches!(url.scheme(), "http" | "https") && url.host_str().is_some_and(|host| !host.is_empty())
+        matches!(url.scheme(), "http" | "https")
+            && url.host_str().is_some_and(|host| !host.is_empty())
     })
 }
 
@@ -253,9 +298,22 @@ fn strip_html(html: &str) -> String {
 /// skips destinations such as the font table.
 fn rtf_to_text(rtf: &[u8]) -> String {
     const SKIPPED: [&str; 16] = [
-        "fonttbl", "colortbl", "stylesheet", "info", "pict", "header", "footer", "object",
-        "listtable", "listoverridetable", "rsidtbl", "generator", "xmlnstbl", "themedata",
-        "colorschememapping", "latentstyles",
+        "fonttbl",
+        "colortbl",
+        "stylesheet",
+        "info",
+        "pict",
+        "header",
+        "footer",
+        "object",
+        "listtable",
+        "listoverridetable",
+        "rsidtbl",
+        "generator",
+        "xmlnstbl",
+        "themedata",
+        "colorschememapping",
+        "latentstyles",
     ];
     let mut text = String::new();
     let mut groups: Vec<(bool, usize)> = Vec::new();
@@ -273,7 +331,9 @@ fn rtf_to_text(rtf: &[u8]) -> String {
         index += 1;
         match byte {
             b'{' => groups.push((skipping, unicode_fallback)),
-            b'}' => (skipping, unicode_fallback) = groups.pop().unwrap_or((skipping, unicode_fallback)),
+            b'}' => {
+                (skipping, unicode_fallback) = groups.pop().unwrap_or((skipping, unicode_fallback))
+            }
             b'\r' | b'\n' => {}
             b'\\' => {
                 let Some(&next) = rtf.get(index) else { break };
@@ -290,7 +350,9 @@ fn rtf_to_text(rtf: &[u8]) -> String {
                     while rtf.get(index).is_some_and(u8::is_ascii_digit) {
                         index += 1;
                     }
-                    let parameter: Option<i32> = std::str::from_utf8(&rtf[number_start..index]).ok().and_then(|n| n.parse().ok());
+                    let parameter: Option<i32> = std::str::from_utf8(&rtf[number_start..index])
+                        .ok()
+                        .and_then(|n| n.parse().ok());
                     if rtf.get(index) == Some(&b' ') {
                         index += 1;
                     }
@@ -301,7 +363,11 @@ fn rtf_to_text(rtf: &[u8]) -> String {
                         "u" => {
                             let code = parameter.unwrap_or(0);
                             let code = if code < 0 { code + 65_536 } else { code };
-                            push(char::from_u32(code as u32).unwrap_or('\u{FFFD}'), skipping, &mut 0);
+                            push(
+                                char::from_u32(code as u32).unwrap_or('\u{FFFD}'),
+                                skipping,
+                                &mut 0,
+                            );
                             pending_fallback = unicode_fallback;
                         }
                         _ if SKIPPED.contains(&word) => skipping = true,
@@ -311,7 +377,9 @@ fn rtf_to_text(rtf: &[u8]) -> String {
                     index += 1;
                     match next {
                         b'\'' => {
-                            let hex = rtf.get(index..index + 2).and_then(|h| std::str::from_utf8(h).ok());
+                            let hex = rtf
+                                .get(index..index + 2)
+                                .and_then(|h| std::str::from_utf8(h).ok());
                             if let Some(value) = hex.and_then(|h| u8::from_str_radix(h, 16).ok()) {
                                 push(char::from(value), skipping, &mut pending_fallback);
                             }
@@ -319,7 +387,9 @@ fn rtf_to_text(rtf: &[u8]) -> String {
                         }
                         b'*' => skipping = true,
                         b'~' => push('\u{A0}', skipping, &mut pending_fallback),
-                        b'\\' | b'{' | b'}' => push(char::from(next), skipping, &mut pending_fallback),
+                        b'\\' | b'{' | b'}' => {
+                            push(char::from(next), skipping, &mut pending_fallback)
+                        }
                         _ => {}
                     }
                 }
@@ -333,11 +403,16 @@ fn rtf_to_text(rtf: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::ClipKind;
     use crate::mime::{MOZ_URL, URI_LIST};
+    use crate::model::ClipKind;
 
     fn offer(entries: &[(&str, &[u8])]) -> MimeMap {
-        MimeMap(entries.iter().map(|(mime, data)| (mime.to_string(), data.to_vec())).collect())
+        MimeMap(
+            entries
+                .iter()
+                .map(|(mime, data)| (mime.to_string(), data.to_vec()))
+                .collect(),
+        )
     }
 
     fn kind(entries: &[(&str, &[u8])]) -> Result<ClipKind, Skip> {
@@ -347,7 +422,9 @@ mod tests {
     fn png(width: u32, height: u32) -> Vec<u8> {
         let image = DynamicImage::new_rgb8(width, height);
         let mut bytes = Vec::new();
-        image.write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Png).unwrap();
+        image
+            .write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Png)
+            .unwrap();
         bytes
     }
 
@@ -360,7 +437,10 @@ mod tests {
             ("text/plain;charset=utf-8", b"hello"),
         ]))
         .unwrap();
-        assert_eq!(capture.content, ClipContent::Text(TextSnippet::new("hello")));
+        assert_eq!(
+            capture.content,
+            ClipContent::Text(TextSnippet::new("hello"))
+        );
         assert_eq!(capture.payload, offer(&[(UTF8_TEXT, b"hello")]));
         assert_eq!(capture.byte_count, 5);
     }
@@ -374,47 +454,86 @@ mod tests {
     #[test]
     fn web_url_text_is_link_and_hex_text_is_color() {
         let link = classify(offer(&[(UTF8_TEXT, b"  https://example.com/a?b=1\n")])).unwrap();
-        assert_eq!(link.content, ClipContent::Link { url: "https://example.com/a?b=1".into(), title: None });
-        assert_eq!(kind(&[(UTF8_TEXT, b"https://exa mple.com")]), Ok(ClipKind::Text));
-        assert_eq!(kind(&[(UTF8_TEXT, b"ftp://example.com")]), Ok(ClipKind::Text));
+        assert_eq!(
+            link.content,
+            ClipContent::Link {
+                url: "https://example.com/a?b=1".into(),
+                title: None
+            }
+        );
+        assert_eq!(
+            kind(&[(UTF8_TEXT, b"https://exa mple.com")]),
+            Ok(ClipKind::Text)
+        );
+        assert_eq!(
+            kind(&[(UTF8_TEXT, b"ftp://example.com")]),
+            Ok(ClipKind::Text)
+        );
         assert_eq!(kind(&[(UTF8_TEXT, b" #ff8800 ")]), Ok(ClipKind::Color));
     }
 
     #[test]
     fn uri_list_with_files_is_files() {
         let capture = classify(offer(&[
-            (URI_LIST, b"# comment\r\nfile:///home/u/a.txt\r\nfile:///home/u/b%20c.txt\r\n"),
+            (
+                URI_LIST,
+                b"# comment\r\nfile:///home/u/a.txt\r\nfile:///home/u/b%20c.txt\r\n",
+            ),
             (UTF8_TEXT, b"/home/u/a.txt"),
         ]))
         .unwrap();
         assert_eq!(
             capture.content,
-            ClipContent::Files(vec!["file:///home/u/a.txt".into(), "file:///home/u/b%20c.txt".into()])
+            ClipContent::Files(vec![
+                "file:///home/u/a.txt".into(),
+                "file:///home/u/b%20c.txt".into()
+            ])
         );
     }
 
     #[test]
     fn gnome_copied_files_is_files_and_cut_is_stored_as_copy() {
         let capture = classify(offer(&[(GNOME_COPIED_FILES, b"cut\nfile:///tmp/x")])).unwrap();
-        assert_eq!(capture.content, ClipContent::Files(vec!["file:///tmp/x".into()]));
-        assert_eq!(capture.payload.get(GNOME_COPIED_FILES), Some(b"copy\nfile:///tmp/x".as_slice()));
+        assert_eq!(
+            capture.content,
+            ClipContent::Files(vec!["file:///tmp/x".into()])
+        );
+        assert_eq!(
+            capture.payload.get(GNOME_COPIED_FILES),
+            Some(b"copy\nfile:///tmp/x".as_slice())
+        );
     }
 
     #[test]
     fn uri_list_with_web_uri_is_link() {
         assert_eq!(
-            classify(offer(&[(URI_LIST, b"https://example.com/\r\n")])).unwrap().content,
-            ClipContent::Link { url: "https://example.com/".into(), title: None }
+            classify(offer(&[(URI_LIST, b"https://example.com/\r\n")]))
+                .unwrap()
+                .content,
+            ClipContent::Link {
+                url: "https://example.com/".into(),
+                title: None
+            }
         );
     }
 
     #[test]
     fn moz_url_gives_link_with_title() {
-        let utf16: Vec<u8> = "https://example.com\nExample".encode_utf16().flat_map(u16::to_le_bytes).collect();
-        let capture = classify(offer(&[(MOZ_URL, &utf16), (UTF8_TEXT, b"https://example.com")])).unwrap();
+        let utf16: Vec<u8> = "https://example.com\nExample"
+            .encode_utf16()
+            .flat_map(u16::to_le_bytes)
+            .collect();
+        let capture = classify(offer(&[
+            (MOZ_URL, &utf16),
+            (UTF8_TEXT, b"https://example.com"),
+        ]))
+        .unwrap();
         assert_eq!(
             capture.content,
-            ClipContent::Link { url: "https://example.com".into(), title: Some("Example".into()) }
+            ClipContent::Link {
+                url: "https://example.com".into(),
+                title: Some("Example".into())
+            }
         );
     }
 
@@ -426,7 +545,13 @@ mod tests {
             ("application/x-qt-image", b"x"),
         ]))
         .unwrap();
-        assert_eq!(capture.content, ClipContent::Image(PixelSize { width: 1_120, height: 280 }));
+        assert_eq!(
+            capture.content,
+            ClipContent::Image(PixelSize {
+                width: 1_120,
+                height: 280
+            })
+        );
         assert_eq!(capture.payload.mimes().collect::<Vec<_>>(), ["image/png"]);
         let thumbnail = image::load_from_memory(&capture.thumbnail_png.unwrap()).unwrap();
         assert_eq!((thumbnail.width(), thumbnail.height()), (560, 140));
@@ -441,40 +566,67 @@ mod tests {
 
     #[test]
     fn undecodable_image_falls_through_to_later_rules() {
-        assert_eq!(kind(&[("image/png", b"garbage"), (UTF8_TEXT, b"caption")]), Ok(ClipKind::Text));
+        assert_eq!(
+            kind(&[("image/png", b"garbage"), (UTF8_TEXT, b"caption")]),
+            Ok(ClipKind::Text)
+        );
         assert_eq!(kind(&[("image/png", b"garbage")]), Ok(ClipKind::Data));
     }
 
     #[test]
     fn pdf_media_and_data_kinds() {
-        assert_eq!(kind(&[(PDF, b"%PDF-1.7"), (UTF8_TEXT, b"text")]), Ok(ClipKind::Pdf));
+        assert_eq!(
+            kind(&[(PDF, b"%PDF-1.7"), (UTF8_TEXT, b"text")]),
+            Ok(ClipKind::Pdf)
+        );
         assert_eq!(kind(&[("video/mp4", b"....")]), Ok(ClipKind::Media));
         assert_eq!(kind(&[("audio/ogg", b"....")]), Ok(ClipKind::Media));
-        assert_eq!(kind(&[("text/tab-separated-values", b"a\tb")]), Ok(ClipKind::Data));
+        assert_eq!(
+            kind(&[("text/tab-separated-values", b"a\tb")]),
+            Ok(ClipKind::Data)
+        );
     }
 
     #[test]
     fn gtk_color_target_is_color() {
-        let data: Vec<u8> = [65_535u16, 32_768, 0, 65_535].iter().flat_map(|c| c.to_le_bytes()).collect();
+        let data: Vec<u8> = [65_535u16, 32_768, 0, 65_535]
+            .iter()
+            .flat_map(|c| c.to_le_bytes())
+            .collect();
         let capture = classify(offer(&[(COLOR, &data)])).unwrap();
-        let ClipContent::Color(color) = capture.content else { panic!("not a color") };
+        let ClipContent::Color(color) = capture.content else {
+            panic!("not a color")
+        };
         assert_eq!(color.hex(), "#FF8000");
     }
 
     #[test]
     fn rich_text_uses_plain_text_else_decoded_rtf() {
-        let rtf: &[u8] = br"{\rtf1\ansi{\fonttbl\f0 Helvetica;}\f0 Hello \b bold\b0\par caf\'e9 \u8364?}";
+        let rtf: &[u8] =
+            br"{\rtf1\ansi{\fonttbl\f0 Helvetica;}\f0 Hello \b bold\b0\par caf\'e9 \u8364?}";
         let with_text = classify(offer(&[("text/rtf", rtf), (UTF8_TEXT, b"Hello plain")])).unwrap();
-        assert_eq!(with_text.content, ClipContent::RichText(TextSnippet::new("Hello plain")));
+        assert_eq!(
+            with_text.content,
+            ClipContent::RichText(TextSnippet::new("Hello plain"))
+        );
         let only_rtf = classify(offer(&[("text/rtf", rtf), (UTF8_TEXT, b"  ")])).unwrap();
-        assert_eq!(only_rtf.content, ClipContent::RichText(TextSnippet::new("Hello bold\ncafé €")));
-        assert_eq!(kind(&[("application/rtf", br"{\rtf1 {\fonttbl x;}}")]), Err(Skip::Blank));
+        assert_eq!(
+            only_rtf.content,
+            ClipContent::RichText(TextSnippet::new("Hello bold\ncafé €"))
+        );
+        assert_eq!(
+            kind(&[("application/rtf", br"{\rtf1 {\fonttbl x;}}")]),
+            Err(Skip::Blank)
+        );
     }
 
     #[test]
     fn html_only_is_rich_text_with_tags_stripped() {
         let capture = classify(offer(&[(HTML, b"<p>Hello</p>\n<b>world</b>")])).unwrap();
-        assert_eq!(capture.content, ClipContent::RichText(TextSnippet::new("Hello world")));
+        assert_eq!(
+            capture.content,
+            ClipContent::RichText(TextSnippet::new("Hello world"))
+        );
         assert_eq!(kind(&[(HTML, b"<br><img src=x>")]), Err(Skip::Blank));
     }
 
@@ -485,9 +637,21 @@ mod tests {
 
     #[test]
     fn concealed_selection_is_skipped() {
-        assert_eq!(kind(&[(UTF8_TEXT, b"hunter2"), (KDE_PASSWORD_HINT, b"secret")]), Err(Skip::Concealed));
-        assert_eq!(kind(&[(UTF8_TEXT, b"hunter2"), ("org.nspasteboard.ConcealedType", b"")]), Err(Skip::Concealed));
-        assert_eq!(kind(&[(UTF8_TEXT, b"note"), (KDE_PASSWORD_HINT, b"other")]), Ok(ClipKind::Text));
+        assert_eq!(
+            kind(&[(UTF8_TEXT, b"hunter2"), (KDE_PASSWORD_HINT, b"secret")]),
+            Err(Skip::Concealed)
+        );
+        assert_eq!(
+            kind(&[
+                (UTF8_TEXT, b"hunter2"),
+                ("org.nspasteboard.ConcealedType", b"")
+            ]),
+            Err(Skip::Concealed)
+        );
+        assert_eq!(
+            kind(&[(UTF8_TEXT, b"note"), (KDE_PASSWORD_HINT, b"other")]),
+            Ok(ClipKind::Text)
+        );
     }
 
     #[test]
@@ -498,15 +662,26 @@ mod tests {
 
     #[test]
     fn unknown_or_empty_targets_store_nothing() {
-        assert_eq!(kind(&[("TARGETS", b"x"), (UTF8_TEXT, b"")]), Err(Skip::NothingStored));
+        assert_eq!(
+            kind(&[("TARGETS", b"x"), (UTF8_TEXT, b"")]),
+            Err(Skip::NothingStored)
+        );
     }
 
     #[test]
     fn hash_ignores_target_order_text_aliases_and_volatile_data() {
-        let a = classify(offer(&[(HTML, b"<b>x</b>"), ("UTF8_STRING", b"x"), ("chromium/x-web-custom-data", b"1")]))
-            .unwrap();
-        let b = classify(offer(&[(UTF8_TEXT, b"x"), ("chromium/x-web-custom-data", b"2"), (HTML, b"<b>x</b>")]))
-            .unwrap();
+        let a = classify(offer(&[
+            (HTML, b"<b>x</b>"),
+            ("UTF8_STRING", b"x"),
+            ("chromium/x-web-custom-data", b"1"),
+        ]))
+        .unwrap();
+        let b = classify(offer(&[
+            (UTF8_TEXT, b"x"),
+            ("chromium/x-web-custom-data", b"2"),
+            (HTML, b"<b>x</b>"),
+        ]))
+        .unwrap();
         assert_eq!(a.content_hash, b.content_hash);
         let c = classify(offer(&[(UTF8_TEXT, b"y"), (HTML, b"<b>x</b>")])).unwrap();
         assert_ne!(a.content_hash, c.content_hash);
@@ -515,6 +690,9 @@ mod tests {
     #[test]
     fn hash_is_stable_across_releases() {
         let capture = classify(offer(&[("text/plain", b"hello")])).unwrap();
-        assert_eq!(capture.content_hash.0, "2a8602a46827ffc664cb3d16c1533f292eb4b20bc7d18630abc747ea9e28f1ca");
+        assert_eq!(
+            capture.content_hash.0,
+            "2a8602a46827ffc664cb3d16c1533f292eb4b20bc7d18630abc747ea9e28f1ca"
+        );
     }
 }

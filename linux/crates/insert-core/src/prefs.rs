@@ -17,7 +17,12 @@ pub enum HistoryLimit {
 }
 
 impl HistoryLimit {
-    pub const ALL: [HistoryLimit; 4] = [Self::Clips100, Self::Clips500, Self::Clips1000, Self::Clips5000];
+    pub const ALL: [HistoryLimit; 4] = [
+        Self::Clips100,
+        Self::Clips500,
+        Self::Clips1000,
+        Self::Clips5000,
+    ];
 
     pub fn count(self) -> usize {
         match self {
@@ -29,7 +34,9 @@ impl HistoryLimit {
     }
 
     pub fn from_count(count: u64) -> Option<Self> {
-        Self::ALL.into_iter().find(|limit| limit.count() as u64 == count)
+        Self::ALL
+            .into_iter()
+            .find(|limit| limit.count() as u64 == count)
     }
 
     /// For example "1,000 clips".
@@ -67,7 +74,9 @@ impl Default for Preferences {
 
 impl Preferences {
     pub fn load(path: &Path) -> Self {
-        std::fs::read(path).map(|bytes| Self::from_json(&bytes)).unwrap_or_default()
+        std::fs::read(path)
+            .map(|bytes| Self::from_json(&bytes))
+            .unwrap_or_default()
     }
 
     pub fn save(&self, path: &Path) -> io::Result<()> {
@@ -76,8 +85,11 @@ impl Preferences {
 
     pub fn from_json(bytes: &[u8]) -> Self {
         let defaults = Self::default();
-        let Ok(Value::Object(map)) = serde_json::from_slice::<Value>(bytes) else { return defaults };
-        let flag = |key: &str, default: bool| map.get(key).and_then(Value::as_bool).unwrap_or(default);
+        let Ok(Value::Object(map)) = serde_json::from_slice::<Value>(bytes) else {
+            return defaults;
+        };
+        let flag =
+            |key: &str, default: bool| map.get(key).and_then(Value::as_bool).unwrap_or(default);
         Self {
             show_tray_icon: flag("showTrayIcon", defaults.show_tray_icon),
             launch_at_login: flag("launchAtLogin", defaults.launch_at_login),
@@ -91,7 +103,11 @@ impl Preferences {
             ignored_apps: map
                 .get("ignoredApps")
                 .and_then(Value::as_array)
-                .map(|apps| apps.iter().filter_map(|app| serde_json::from_value(app.clone()).ok()).collect())
+                .map(|apps| {
+                    apps.iter()
+                        .filter_map(|app| serde_json::from_value(app.clone()).ok())
+                        .collect()
+                })
                 .unwrap_or_default(),
         }
     }
@@ -132,7 +148,10 @@ mod tests {
     use super::*;
 
     fn app(id: &str) -> SourceApp {
-        SourceApp { id: id.into(), name: id.into() }
+        SourceApp {
+            id: id.into(),
+            name: id.into(),
+        }
     }
 
     #[test]
@@ -172,14 +191,20 @@ mod tests {
         assert!(!prefs.show_tray_icon);
         assert_eq!(prefs.ignored_apps, [app("a")]);
         assert_eq!(Preferences::from_json(b"[1,2]"), Preferences::default());
-        assert_eq!(Preferences::load(Path::new("/nonexistent/preferences.json")), Preferences::default());
+        assert_eq!(
+            Preferences::load(Path::new("/nonexistent/preferences.json")),
+            Preferences::default()
+        );
     }
 
     #[test]
     fn ignored_apps_match_by_id_and_skip_duplicates() {
         let mut prefs = Preferences::default();
         assert!(prefs.ignore_app(app("a")));
-        assert!(!prefs.ignore_app(SourceApp { id: "a".into(), name: "Other".into() }));
+        assert!(!prefs.ignore_app(SourceApp {
+            id: "a".into(),
+            name: "Other".into()
+        }));
         assert!(prefs.is_ignored(Some(&app("a"))));
         assert!(!prefs.is_ignored(Some(&app("b"))));
         assert!(!prefs.is_ignored(None));
@@ -189,7 +214,13 @@ mod tests {
 
     #[test]
     fn history_limit_labels() {
-        let labels: Vec<String> = HistoryLimit::ALL.iter().map(|limit| limit.label()).collect();
-        assert_eq!(labels, ["100 clips", "500 clips", "1,000 clips", "5,000 clips"]);
+        let labels: Vec<String> = HistoryLimit::ALL
+            .iter()
+            .map(|limit| limit.label())
+            .collect();
+        assert_eq!(
+            labels,
+            ["100 clips", "500 clips", "1,000 clips", "5,000 clips"]
+        );
     }
 }
