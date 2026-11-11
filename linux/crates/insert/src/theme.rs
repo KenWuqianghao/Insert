@@ -71,6 +71,26 @@ pub fn icon(names: &[&str]) -> gtk::Image {
     gtk::Image::from_gicon(&gio::ThemedIcon::from_names(names))
 }
 
+/// Breeze names for the Adwaita icon names that Breeze does not have.
+const ALTERNATES: &[(&str, &[&str])] = &[
+    ("view-pin-symbolic", &["pin-symbolic", "window-pin-symbolic"]),
+    ("format-text-rich-symbolic", &["format-text-bold-symbolic"]),
+    ("preferences-system-privacy-symbolic", &["security-high-symbolic"]),
+];
+
+/// An icon by its Adwaita name, with the Breeze name as a fallback.
+pub fn named_gicon(name: &str) -> gio::ThemedIcon {
+    let mut names = vec![name];
+    if let Some((_, alternates)) = ALTERNATES.iter().find(|(n, _)| *n == name) {
+        names.extend_from_slice(alternates);
+    }
+    gio::ThemedIcon::from_names(&names)
+}
+
+pub fn named_icon(name: &str) -> gtk::Image {
+    gtk::Image::from_gicon(&named_gicon(name))
+}
+
 fn read_appearance() -> Appearance {
     let scheme = read_portal_setting("color-scheme").and_then(|v| v.get::<u32>());
     let accent = read_portal_setting("accent-color")

@@ -27,6 +27,7 @@ const SHOW_MS: u32 = 220;
 const HIDE_MS: u32 = 160;
 const MODE_MS: u32 = 200;
 const STRIP_HEIGHT: i32 = 270;
+const MENU_FOCUS_GRACE: std::time::Duration = std::time::Duration::from_millis(150);
 
 /// A notice pill in the top bar.
 struct Notice {
@@ -60,6 +61,7 @@ pub struct Tray {
     revealer: gtk::Revealer,
     panel: gtk::Box,
     preview_revealer: gtk::Revealer,
+    preview_frame: gtk::ScrolledWindow,
     preview_slot: gtk::Box,
     previewed: Cell<Option<ClipId>>,
     search: gtk::Text,
@@ -91,6 +93,7 @@ pub struct Tray {
     actions: gio::SimpleActionGroup,
     /// The pinboard whose tab menu is open.
     pub menu_pinboard: Cell<Option<PinboardId>>,
+    menu_open: Cell<bool>,
     app: Weak<App>,
 }
 
@@ -113,10 +116,18 @@ impl Tray {
         panel.add_css_class("tray");
 
         let preview_slot = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        // The preview height is fixed by the screen, whatever the content asks for.
+        let preview_frame = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .vscrollbar_policy(gtk::PolicyType::External)
+            .propagate_natural_height(false)
+            .child(&preview_slot)
+            .build();
         let preview_revealer = gtk::Revealer::builder()
             .transition_type(gtk::RevealerTransitionType::SlideUp)
             .transition_duration(MODE_MS)
-            .child(&preview_slot)
+            .child(&preview_frame)
+            .vexpand(false)
             .build();
         panel.append(&preview_revealer);
 
@@ -281,6 +292,7 @@ impl Tray {
             .transition_type(gtk::RevealerTransitionType::SlideUp)
             .transition_duration(SHOW_MS)
             .child(&panel_overlay)
+            .vexpand(false)
             .build();
         root.append(&revealer);
         window.set_child(Some(&root));
@@ -293,6 +305,7 @@ impl Tray {
             revealer,
             panel,
             preview_revealer,
+            preview_frame,
             preview_slot,
             previewed: Cell::new(None),
             search,
@@ -321,6 +334,7 @@ impl Tray {
             appearing: RefCell::new(HashSet::new()),
             actions: gio::SimpleActionGroup::new(),
             menu_pinboard: Cell::new(None),
+            menu_open: Cell::new(false),
             app: app.clone(),
         };
         tray.connect(app, &backdrop, &factory);
@@ -332,11 +346,15 @@ impl Tray {
         click.connect_released(with_app!(app => app, |_, _, _, _| app.hide_tray(None)));
         backdrop.add_controller(click);
 
-        self.window.connect_is_active_notify(with_app!(app => app, |window| {
-            if !window.is_active() && app.tray.model.borrow().is_shown() {
-                app.hide_tray(None);
-            }
-        }));
+        // A menu popup takes the keyboard, and the window reports itself inactive while it is
+        // open. Focus loss counts only when no menu is open.
+        self.window
+            .connect_is_active_notify(with_app!(app => app, |_| app.hide_if_focus_lost()));
+        for button in [&self.filter_button, &self.more_button] {
+            button.connect_active_notify(with_app!(app => app, |button| {
+                app.tray.set_menu_open(button.is_active());
+            }));
+        }
         self.window.connect_close_request(with_app!(app => app or glib::Propagation::Stop, |_| {
             app.hide_tray(None);
             glib::Propagation::Stop
@@ -462,6 +480,23 @@ impl Tray {
         GtkWindowExt::focus(&self.window).and_downcast::<gtk::Editable>()
     }
 
+    /// After a menu closes, focus comes back to the tray unless the user clicked another app.
+    pub fn set_menu_open(&self, open: bool) {
+        self.menu_open.set(open);
+        if !open {
+            let app = self.app.clone();
+            glib::timeout_add_local_once(MENU_FOCUS_GRACE, move || {
+                if let Some(app) = app.upgrade() {
+                    app.hide_if_focus_lost();
+                }
+            });
+        }
+    }
+
+    pub fn is_menu_open(&self) -> bool {
+        self.menu_open.get()
+    }
+
     pub fn is_composing(&self) -> bool {
         self.composing.get()
     }
@@ -517,7 +552,8 @@ impl Tray {
         let model = self.model.borrow();
         if model.visible.is_empty() {
             let state = empty_state(model.scope, model.kind, &model.query);
-            self.empty_icon.set_icon_name(Some(state.icon_name()));
+            self.empty_icon
+                .set_from_gicon(&crate::theme::named_gicon(state.icon_name()));
             self.empty_title.set_text(state.title());
             self.empty_detail.set_text(state.detail());
             self.strip.set_visible_child_name("empty");
@@ -549,8 +585,9 @@ impl Tray {
         }
         if previewing {
             let screen = self.window.height().max(600);
-            self.preview_slot
-                .set_size_request(-1, (f64::from(screen) * 0.46).min(480.0) as i32);
+            let height = (f64::from(screen) * 0.46).min(480.0) as i32;
+            self.preview_frame.set_min_content_height(height);
+            self.preview_frame.set_max_content_height(height);
         }
         self.preview_revealer.set_reveal_child(previewing);
 
@@ -717,10 +754,12 @@ impl Tray {
         popover.set_parent(&self.panel);
         popover.set_has_arrow(false);
         popover.set_pointing_to(Some(&gdk::Rectangle::new(point.x() as i32, point.y() as i32, 1, 1)));
-        popover.connect_closed(|popover| {
+        popover.connect_closed(with_app!(&self.app => app, |popover| {
+            app.tray.set_menu_open(false);
             let popover = popover.clone();
             glib::idle_add_local_once(move || popover.unparent());
-        });
+        }));
+        self.set_menu_open(true);
         popover.popup();
     }
 }

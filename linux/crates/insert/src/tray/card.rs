@@ -4,7 +4,7 @@ use insert_core::{format::grapheme_prefix, model::file_name, Clip, ClipContent, 
 use time::OffsetDateTime;
 
 use crate::appicon::app_visual;
-use crate::theme::{appearance, background_class};
+use crate::theme::{appearance, background_class, named_icon};
 
 pub const CARD_SIZE: i32 = 232;
 const HEADER_HEIGHT: i32 = 52;
@@ -74,7 +74,7 @@ impl Card {
                 );
             }
             None => {
-                let image = gtk::Image::from_icon_name(clip.kind().icon_name());
+                let image = named_icon(clip.kind().icon_name());
                 image.set_pixel_size(22);
                 image.add_css_class("kind-icon");
                 fixed.put(&image, f64::from(CARD_SIZE - 14 - 22), 15.0);
@@ -226,7 +226,7 @@ fn body(clip: &Clip, library: &Library) -> gtk::Widget {
         ClipContent::Pdf => {
             let column = gtk::Box::new(gtk::Orientation::Vertical, 8);
             column.set_valign(gtk::Align::Center);
-            let image = gtk::Image::from_icon_name(clip.kind().icon_name());
+            let image = named_icon(clip.kind().icon_name());
             image.set_pixel_size(36);
             image.add_css_class("secondary");
             let text = gtk::Label::new(Some("PDF Document"));

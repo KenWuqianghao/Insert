@@ -6,6 +6,7 @@ use insert_core::{
 
 use super::card::{color_body, file_icon, label};
 use crate::appicon::app_visual;
+use crate::theme::named_icon;
 
 const FULL_TEXT_LIMIT: usize = 200_000;
 
@@ -133,7 +134,7 @@ fn content_for(clip: &Clip, library: &Library) -> gtk::Widget {
         ClipContent::Pdf | ClipContent::Media | ClipContent::Data => {
             let column = gtk::Box::new(gtk::Orientation::Vertical, 10);
             column.set_valign(gtk::Align::Center);
-            let image = gtk::Image::from_icon_name(clip.kind().icon_name());
+            let image = named_icon(clip.kind().icon_name());
             image.set_pixel_size(44);
             image.add_css_class("secondary");
             let text = gtk::Label::new(Some(&format!(

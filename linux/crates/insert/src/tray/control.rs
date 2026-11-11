@@ -63,6 +63,15 @@ impl App {
         }
     }
 
+    pub fn hide_if_focus_lost(self: &Rc<Self>) {
+        let lost = !self.tray.window.is_active()
+            && !self.tray.is_menu_open()
+            && self.tray.model.borrow().is_shown();
+        if lost {
+            self.hide_tray(None);
+        }
+    }
+
     pub fn finish_hide(self: &Rc<Self>) {
         if self.tray.model.borrow().state != TrayState::Hiding {
             return;
@@ -318,7 +327,7 @@ impl App {
         }
     }
 
-    fn open_clip_menu(self: &Rc<Self>, id: ClipId, widget: &gtk::Widget, x: f64, y: f64) {
+    pub fn open_clip_menu(self: &Rc<Self>, id: ClipId, widget: &gtk::Widget, x: f64, y: f64) {
         let menu = {
             let library = self.library.borrow();
             let Some(clip) = library.clip(id) else { return };
@@ -347,6 +356,9 @@ impl App {
     }
 
     fn begin_naming(self: &Rc<Self>, target: NameTarget) {
+        if !self.tray.model.borrow().is_shown() {
+            return;
+        }
         self.tray.model.borrow_mut().state = TrayState::Naming(target);
         self.render_tray();
         self.tray.focus_field();
