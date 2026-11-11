@@ -1,0 +1,244 @@
+window.tray-window {
+  background: transparent;
+  box-shadow: none;
+}
+
+.tray {
+  background-color: @tray;
+  border-radius: 16px 16px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  transition: opacity 160ms ease-in;
+}
+
+.tray.shown {
+  opacity: 1;
+  transition: opacity 220ms ease-out;
+}
+
+.secondary { color: alpha(@fg, 0.5); }
+.tertiary { color: alpha(@fg, 0.26); }
+
+.search {
+  background-color: alpha(@fg, 0.08);
+  border-radius: 8px;
+  padding: 0 10px;
+}
+
+.search > image { -gtk-icon-size: 13px; }
+
+.search text {
+  font-size: 14px;
+  color: alpha(@fg, 0.85);
+  background: none;
+}
+
+.plain-button,
+.bar-button > button,
+.plus-button,
+.notice-button {
+  background: none;
+  box-shadow: none;
+  border: none;
+  min-height: 0;
+  min-width: 0;
+}
+
+.plain-button { padding: 0; color: alpha(@fg, 0.5); }
+
+.scope-tab {
+  padding: 0 11px;
+  min-height: 28px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: alpha(@fg, 0.5);
+  background: none;
+  box-shadow: none;
+  border: none;
+}
+
+.scope-tab.selected {
+  font-weight: 600;
+  color: alpha(@fg, 0.85);
+  background-color: alpha(@fg, 0.12);
+}
+
+.plus-button {
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0;
+  color: alpha(@fg, 0.5);
+}
+
+.dot {
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 4px;
+}
+
+.bar-button > button {
+  padding: 0 8px;
+  min-height: 28px;
+  color: alpha(@fg, 0.5);
+}
+
+.bar-button.active > button { color: @accent; }
+.filter-label { font-size: 12px; font-weight: 600; }
+
+.notice {
+  background-color: rgba(255, 149, 0, 0.14);
+  border-radius: 14px;
+  padding: 0 4px 0 10px;
+  min-height: 28px;
+  font-size: 12px;
+  font-weight: 500;
+  color: alpha(@fg, 0.85);
+}
+
+.notice-icon { color: #FF9500; }
+
+.notice-button {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background-color: alpha(@fg, 0.08);
+}
+
+.strip { background: none; padding: 0 14px; }
+.strip > row {
+  padding: 8px 8px 30px 8px;
+  background: none;
+  outline: none;
+}
+
+.card {
+  background-color: @card;
+  border-radius: 14px;
+  border: 1px solid alpha(@fg, 0.10);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.22);
+  outline: 0 solid transparent;
+  outline-offset: 2px;
+  transition: outline-color 200ms ease-out, outline-width 200ms ease-out,
+    opacity 160ms ease-in, transform 160ms ease-in;
+}
+
+.card.selected {
+  outline: 3.5px solid @accent;
+}
+
+.card.selected.secondary {
+  outline: 2.5px solid alpha(@accent, 0.55);
+}
+
+.card.deleting {
+  opacity: 0;
+  transform: translate(-26px, 8px) scale(0.94);
+}
+
+@keyframes card-appear {
+  from { opacity: 0; transform: translateX(-40px); }
+  to { opacity: 1; transform: none; }
+}
+
+.card.appear { animation: card-appear 240ms ease-out; }
+
+.card-title { color: white; font-size: 15px; font-weight: 600; }
+.card-subtitle { color: rgba(255, 255, 255, 0.82); font-size: 11px; font-weight: 500; }
+.card-header .kind-icon { color: rgba(255, 255, 255, 0.85); }
+.card-header .app-icon { -gtk-icon-shadow: 0 1px 4px rgba(0, 0, 0, 0.25); }
+
+.card-text {
+  font-size: 12.5px;
+  color: alpha(@fg, 0.88);
+}
+
+.accent-icon { color: @accent; }
+.card-link-title { font-size: 15px; font-weight: 600; color: alpha(@fg, 0.85); }
+.card-link-url { font-size: 12px; color: alpha(@fg, 0.5); }
+.card-color-hex { font-size: 17px; font-weight: 600; font-family: monospace; }
+.on-light { color: rgba(0, 0, 0, 0.75); }
+.on-dark { color: white; }
+.card-file-name { font-size: 12px; font-weight: 500; color: alpha(@fg, 0.85); }
+.card-more { font-size: 11px; color: alpha(@fg, 0.5); }
+.card-placeholder { font-size: 12px; font-weight: 500; color: alpha(@fg, 0.5); }
+
+.card-footer {
+  background-color: alpha(@card, 0.94);
+  padding: 0 12px;
+}
+
+.card-footer-text { font-size: 11px; font-weight: 500; color: alpha(@fg, 0.5); }
+
+.badge {
+  background-color: @accent;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 2px 6px;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+}
+
+.badge.shown { opacity: 1; transform: none; }
+
+.empty-title { font-size: 17px; font-weight: 600; color: alpha(@fg, 0.5); }
+.empty-detail { font-size: 13px; color: alpha(@fg, 0.26); }
+
+.prompt-dim { background-color: rgba(0, 0, 0, 0.28); border-radius: 16px 16px 0 0; }
+
+.prompt {
+  background-color: @card;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.30);
+}
+
+.prompt-title { font-size: 15px; font-weight: 600; }
+.prompt-entry { font-size: 14px; }
+.prompt-hint { font-size: 11px; color: alpha(@fg, 0.5); }
+
+.preview-title { font-size: 15px; font-weight: 600; color: alpha(@fg, 0.85); }
+.preview-subtitle { font-size: 12px; color: alpha(@fg, 0.5); }
+.preview-hint { font-size: 11px; color: alpha(@fg, 0.26); }
+
+.preview-box {
+  background-color: @card;
+  border-radius: 10px;
+}
+
+.preview-text, .preview-text text {
+  font-size: 13px;
+  background: none;
+  color: alpha(@fg, 0.85);
+}
+
+.preview-link-title { font-size: 17px; font-weight: 600; }
+.preview-link-url { font-size: 14px; color: alpha(@fg, 0.5); }
+.preview-file-name { font-size: 13px; font-weight: 500; }
+.preview-file-folder { font-size: 11px; color: alpha(@fg, 0.5); }
+.preview-color-hex { font-size: 28px; font-weight: 600; font-family: monospace; }
+.preview-color-rgb { font-size: 14px; font-weight: 500; font-family: monospace; }
+.preview-placeholder { font-size: 14px; font-weight: 500; color: alpha(@fg, 0.5); }
+
+window.settings .group {
+  background-color: alpha(@fg, 0.04);
+  border-radius: 10px;
+}
+
+window.settings .row { padding: 10px 14px; min-height: 30px; }
+window.settings .row + .row { border-top: 1px solid alpha(@fg, 0.06); }
+window.settings .row-title { font-size: 13px; }
+window.settings .row-description { font-size: 11px; color: alpha(@fg, 0.5); }
+window.settings .group-footer { font-size: 11px; color: alpha(@fg, 0.5); margin: 0 6px; }
+window.settings .warning { color: #E67E00; font-size: 12px; }
+window.settings .keycap {
+  background-color: alpha(@fg, 0.08);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-weight: 500;
+}
+window.settings .pane-button { padding: 2px 12px; font-size: 11px; }
