@@ -200,9 +200,9 @@ impl SettingsWindow {
             if this.updating.get() {
                 return;
             }
-            let result = app.set_launch_at_login(switch.is_active());
-            if let Err(text) = result {
-                this.login_warning.show(&text);
+            match app.set_launch_at_login(switch.is_active()) {
+                Ok(()) => this.login_warning.root.set_visible(false),
+                Err(text) => this.login_warning.show(&text),
             }
         }));
         let this = Rc::downgrade(&settings);
