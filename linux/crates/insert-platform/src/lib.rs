@@ -9,5 +9,6 @@ pub mod clipboard;
 pub mod paste;
 mod portal;
 pub mod shortcut;
+pub mod tray_icon;
 
 pub const APP_ID: &str = "io.github.kenwuqianghao.Insert";
