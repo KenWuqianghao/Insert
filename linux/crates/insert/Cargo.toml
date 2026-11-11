@@ -1,0 +1,10 @@
+[package]
+name = "insert"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gtk4 = { version = "0.11.5", features = ["v4_14"] }
+insert-core = { path = "../insert-core" }
+insert-platform = { path = "../insert-platform" }
