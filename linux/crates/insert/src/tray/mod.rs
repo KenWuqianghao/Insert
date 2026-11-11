@@ -493,6 +493,10 @@ impl Tray {
         }
     }
 
+    pub fn popup_filter_menu(&self) {
+        self.filter_button.popup();
+    }
+
     pub fn is_menu_open(&self) -> bool {
         self.menu_open.get()
     }

@@ -64,3 +64,31 @@ pub fn parse_test_key(spec: &str) -> Option<(Key, Modifiers)> {
     };
     Some((key, modifiers))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn named_keys_and_modifiers_translate() {
+        let ctrl = gdk::ModifierType::CONTROL_MASK;
+        let shift = gdk::ModifierType::SHIFT_MASK;
+        assert_eq!(
+            translate(gdk::Key::Down, gdk::ModifierType::empty()),
+            Some((Key::Down, Modifiers::NONE))
+        );
+        assert_eq!(translate(gdk::Key::_1, ctrl), Some((Key::Char('1'), Modifiers::CTRL)));
+        assert_eq!(
+            translate(gdk::Key::ISO_Left_Tab, shift),
+            Some((Key::Tab, Modifiers::SHIFT))
+        );
+        assert_eq!(translate(gdk::Key::A, shift), Some((Key::Char('a'), Modifiers::SHIFT)));
+        assert_eq!(translate(gdk::Key::comma, ctrl), Some((Key::Char(','), Modifiers::CTRL)));
+    }
+
+    #[test]
+    fn modifier_keys_alone_are_not_tray_keys() {
+        assert_eq!(translate(gdk::Key::Control_L, gdk::ModifierType::empty()), None);
+        assert_eq!(translate(gdk::Key::F5, gdk::ModifierType::empty()), None);
+    }
+}

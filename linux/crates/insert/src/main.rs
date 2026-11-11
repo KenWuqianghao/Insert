@@ -115,7 +115,7 @@ fn install_app_actions(app: &Rc<App>) {
 
 /// Verification only. `test-key` feeds the tray key path, `test-capture` the capture pipeline,
 /// and `test-action` runs a window action such as "tray.new-pinboard" or "settings.pane|privacy",
-/// or "clip-menu" to open the card menu of the primary clip.
+/// or "clip-menu" and "filter-menu" to open those menus.
 fn install_test_hooks(app: &Rc<App>) {
     let weak = Rc::downgrade(app);
     let key = gio::SimpleAction::new("test-key", Some(glib::VariantTy::STRING));
@@ -170,6 +170,10 @@ fn install_test_hooks(app: &Rc<App>) {
             if let Some((id, card)) = primary.and_then(|id| Some((id, app.tray.card_widget(id)?))) {
                 app.open_clip_menu(id, card.upcast_ref(), 120.0, 120.0);
             }
+            return;
+        }
+        if spec == "filter-menu" {
+            app.tray.popup_filter_menu();
             return;
         }
         let (name, target) = match spec.split_once('|') {
