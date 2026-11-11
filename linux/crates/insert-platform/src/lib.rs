@@ -5,5 +5,7 @@
 
 pub mod autostart;
 pub mod clipboard;
+pub mod paste;
+mod portal;
 
 pub const APP_ID: &str = "io.github.kenwuqianghao.Insert";
