@@ -115,7 +115,8 @@ impl MimeMap {
         url::Url::parse(&candidate.0).ok().map(|_| candidate)
     }
 
-    pub(crate) fn image(&self) -> Option<&[u8]> {
+    /// The best image entry, for the preview.
+    pub fn image(&self) -> Option<&[u8]> {
         self.0
             .iter()
             .filter(|(name, _)| image_rank(name).is_some())

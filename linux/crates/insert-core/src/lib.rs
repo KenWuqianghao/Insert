@@ -9,6 +9,7 @@ pub mod model;
 pub mod prefs;
 pub mod selection;
 pub mod storage;
+pub mod tint;
 
 pub use capture::{classify, Capture, Skip, MAX_CAPTURE_BYTES, THUMBNAIL_MAX_SIDE};
 pub use keys::{
@@ -26,3 +27,4 @@ pub use model::{
 pub use prefs::{HistoryLimit, Preferences};
 pub use selection::Selection;
 pub use storage::{LibraryIndex, LoadedIndex, Paths, Storage};
+pub use tint::{header_tint, NEUTRAL_TINT};
