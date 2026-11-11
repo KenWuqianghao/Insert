@@ -5,3 +5,15 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+ashpd = { version = "0.14.0", default-features = false, features = ["async-io", "global_shortcuts", "remote_desktop", "screencast"] }
+async-channel = "2.5.0"
+futures-lite = "2.6.1"
+ksni = { version = "0.3.7", default-features = false, features = ["async-io", "blocking"] }
+log = "0.4.35"
+serde = "1"
+rustix = { version = "1.1.6", features = ["event", "pipe", "fs"] }
+thiserror = "2.0.21"
+wayland-client = "0.31.15"
+wayland-protocols = { version = "0.32.13", features = ["client", "staging"] }
+wayland-protocols-wlr = { version = "0.3.12", features = ["client"] }
+zbus = "6.2.1"
