@@ -4,5 +4,6 @@
 //! await them from `glib::MainContext::spawn_local`. Long-lived listeners own a thread and report over `async-channel`.
 
 pub mod autostart;
+pub mod clipboard;
 
 pub const APP_ID: &str = "io.github.kenwuqianghao.Insert";
