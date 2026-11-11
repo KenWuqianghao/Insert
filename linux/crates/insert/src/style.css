@@ -229,12 +229,12 @@ window.settings .group {
   border-radius: 10px;
 }
 
-window.settings .row { padding: 10px 14px; min-height: 30px; }
-window.settings .row + .row { border-top: 1px solid alpha(@fg, 0.06); }
+window.settings .setting-row { padding: 10px 14px; min-height: 30px; }
+window.settings .setting-row + .setting-row { border-top: 1px solid alpha(@fg, 0.06); }
 window.settings .row-title { font-size: 13px; }
 window.settings .row-description { font-size: 11px; color: alpha(@fg, 0.5); }
 window.settings .group-footer { font-size: 11px; color: alpha(@fg, 0.5); margin: 0 6px; }
-window.settings .warning { color: #E67E00; font-size: 12px; }
+window.settings .setting-warning { color: #E67E00; font-size: 12px; }
 window.settings .keycap {
   background-color: alpha(@fg, 0.08);
   border-radius: 6px;

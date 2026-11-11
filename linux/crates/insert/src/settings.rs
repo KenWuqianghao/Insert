@@ -43,15 +43,15 @@ impl SettingsWindow {
         let window = gtk::Window::builder()
             .application(&app.gtk_app)
             .title("General")
-            .default_width(500)
             .resizable(false)
             .hide_on_close(true)
             .build();
         window.add_css_class("settings");
 
         let stack = gtk::Stack::new();
-        stack.set_vhomogeneous(false);
-        stack.set_interpolate_size(true);
+        // A pane switch that changes the height of this fixed-size window makes it wider on
+        // KWin. Both panes keep the height of the taller one.
+        stack.set_vhomogeneous(true);
         let switcher = gtk::Box::new(gtk::Orientation::Horizontal, 2);
         for (name, title, icon_names) in PANES {
             let content = gtk::Box::new(gtk::Orientation::Vertical, 2);
@@ -87,6 +87,7 @@ impl SettingsWindow {
         actions.add_action(&pane);
         window.insert_action_group("settings", Some(&actions));
         let header = gtk::HeaderBar::new();
+        header.set_decoration_layout(Some(":close"));
         header.set_title_widget(Some(&switcher));
         window.set_titlebar(Some(&header));
 
@@ -154,8 +155,8 @@ impl SettingsWindow {
         ));
         footer.add_css_class("group-footer");
         footer.set_wrap(true);
+        footer.set_max_width_chars(1);
         footer.set_xalign(0.0);
-        footer.set_margin_top(-10);
         privacy.append(&footer);
         privacy.append(&group_of(&[Row::new(
             "Pause capture",
@@ -172,6 +173,7 @@ impl SettingsWindow {
 
         stack.add_named(&general, Some("general"));
         stack.add_named(&privacy, Some("privacy"));
+        stack.set_size_request(500, -1);
         window.set_child(Some(&stack));
 
         let settings = Rc::new(Self {
@@ -327,7 +329,7 @@ struct Row {
 impl Row {
     fn new(title: &str, description: Option<&str>, control: &impl IsA<gtk::Widget>) -> Self {
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-        row.add_css_class("row");
+        row.add_css_class("setting-row");
         let labels = gtk::Box::new(gtk::Orientation::Vertical, 2);
         labels.set_hexpand(true);
         labels.set_valign(gtk::Align::Center);
@@ -337,6 +339,7 @@ impl Row {
         let description_label = gtk::Label::new(description);
         description_label.set_xalign(0.0);
         description_label.set_wrap(true);
+        description_label.set_max_width_chars(1);
         description_label.add_css_class("row-description");
         description_label.set_visible(description.is_some_and(|d| !d.is_empty()));
         labels.append(&title_label);
@@ -364,11 +367,12 @@ struct Warning {
 impl Warning {
     fn new(text: &str) -> Self {
         let root = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        root.add_css_class("row");
-        root.add_css_class("warning");
+        root.add_css_class("setting-row");
+        root.add_css_class("setting-warning");
         root.append(&icon(&["dialog-warning-symbolic"]));
         let label = gtk::Label::new(Some(text));
         label.set_wrap(true);
+        label.set_max_width_chars(1);
         label.set_xalign(0.0);
         label.set_hexpand(true);
         root.append(&label);
@@ -402,7 +406,7 @@ fn group_of(rows: &[gtk::Widget]) -> gtk::Box {
 
 fn ignored_row(app: &Rc<App>, ignored: &SourceApp) -> gtk::Widget {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    row.add_css_class("row");
+    row.add_css_class("setting-row");
     if let Some(app_icon) = desktop_app(&ignored.id).and_then(|info| info.icon()) {
         let image = gtk::Image::from_gicon(&app_icon);
         image.set_pixel_size(20);
