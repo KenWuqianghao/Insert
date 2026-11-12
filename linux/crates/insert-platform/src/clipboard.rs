@@ -46,7 +46,7 @@ pub type MimeData = Vec<(String, Vec<u8>)>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClipboardEvent {
-    /// Another client changed the clipboard. `mimes` is empty when `concealed` is true.
+    /// Another client changed the clipboard. An entry can have no data. `mimes` is empty when `concealed` is true.
     Changed { mimes: MimeData, concealed: bool },
     /// The watcher stopped. No more events follow.
     Unavailable { reason: String },
@@ -393,7 +393,8 @@ impl State {
                         self.emit(ClipboardEvent::Changed { mimes: Vec::new(), concealed: true });
                         return;
                     }
-                } else if !data.is_empty() {
+                } else {
+                    // An empty entry still counts: privacy markers such as `org.nspasteboard.ConcealedType` have no data.
                     transfer.collected.push((mime, data));
                 }
                 self.start_next_read();
