@@ -221,21 +221,26 @@ pub(crate) fn is_plain_stored(mime: &str) -> bool {
     is_rich_text(mime) || OTHER_STORED.contains(&mime) || is_media(mime) || is_volatile(mime)
 }
 
-/// The offered targets worth reading for capture: privacy markers, every text target, the best
-/// image target, and the stored types. The platform can skip all other targets.
+/// The offered targets worth reading for capture: privacy markers, the best text target, the best
+/// image target, and the stored types. The platform can skip all other targets. Capture keeps one
+/// text entry, so the other text targets only cost time and count against the size limit.
 pub fn select_targets(offered: &[String]) -> Vec<String> {
-    let best_image = offered
-        .iter()
-        .filter_map(|mime| image_rank(mime).map(|rank| (rank, mime)))
-        .min()
-        .map(|(_, mime)| mime);
+    let best = |rank: fn(&str) -> Option<usize>| {
+        offered
+            .iter()
+            .filter_map(|mime| rank(mime).map(|rank| (rank, mime)))
+            .min()
+            .map(|(_, mime)| mime)
+    };
+    let best_text = best(|mime| text_source(mime).map(|(rank, _)| rank));
+    let best_image = best(image_rank);
     offered
         .iter()
         .filter(|mime| {
             is_privacy_marker(mime)
                 || mime.as_str() == KDE_PASSWORD_HINT
-                || text_source(mime).is_some()
                 || is_plain_stored(mime)
+                || Some(*mime) == best_text
                 || Some(*mime) == best_image
         })
         .cloned()
@@ -280,6 +285,16 @@ mod tests {
 
     fn entry(mime: &str, data: &[u8]) -> (String, Vec<u8>) {
         (mime.to_owned(), data.to_vec())
+    }
+
+    #[test]
+    fn select_targets_keeps_the_best_text_target_only() {
+        let offered: Vec<String> = ["STRING", "text/plain", "UTF8_STRING", "text/plain;charset=utf-8", "text/html"]
+            .map(str::to_owned)
+            .to_vec();
+        assert_eq!(select_targets(&offered), ["text/plain;charset=utf-8", "text/html"]);
+        let latin1_only = vec!["TEXT".to_owned(), "STRING".to_owned()];
+        assert_eq!(select_targets(&latin1_only), ["STRING"]);
     }
 
     #[test]
