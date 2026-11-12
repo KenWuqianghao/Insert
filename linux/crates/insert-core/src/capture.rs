@@ -146,8 +146,12 @@ fn classify_payload(payload: &MimeMap) -> Result<(ClipContent, Option<Vec<u8>>),
     }
     if let Some(data) = payload.image() {
         if let Some(size) = image_size(data) {
-            let png = size.can_decode().then(|| thumbnail(data)).flatten();
-            return Ok((ClipContent::Image(size), png));
+            if !size.can_decode() {
+                return Ok((ClipContent::Image(size), None));
+            }
+            if let Some(png) = thumbnail(data) {
+                return Ok((ClipContent::Image(size), Some(png)));
+            }
         }
     }
     if let Some((url, title)) = payload.url_and_title() {
@@ -619,6 +623,8 @@ mod tests {
             Ok(ClipKind::Text)
         );
         assert_eq!(kind(&[("image/png", b"garbage")]), Ok(ClipKind::Data));
+        let corrupt_body = png_header(40, 30);
+        assert_eq!(kind(&[("image/png", &corrupt_body), (UTF8_TEXT, b"caption")]), Ok(ClipKind::Text));
     }
 
     #[test]

@@ -284,7 +284,7 @@ pub fn file_icon(uri: &str) -> gio::Icon {
     gio::content_type_get_icon(&content_type)
 }
 
-fn placeholder(text: &str) -> gtk::Widget {
+pub fn placeholder(text: &str) -> gtk::Widget {
     let label = gtk::Label::new(Some(text));
     label.add_css_class("card-placeholder");
     label.set_valign(gtk::Align::Center);

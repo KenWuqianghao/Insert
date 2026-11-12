@@ -4,7 +4,7 @@ use insert_core::{
     format::grapheme_prefix, model::file_path, Clip, ClipContent, Library, TextSnippet,
 };
 
-use super::card::{color_body, file_icon, label};
+use super::card::{color_body, file_icon, label, placeholder};
 use crate::appicon::app_visual;
 use crate::theme::named_icon;
 
@@ -54,12 +54,12 @@ fn content_for(clip: &Clip, library: &Library) -> gtk::Widget {
             text_view(&full_text(clip, snippet, library))
         }
         ClipContent::Image(size) => {
-            let picture = size
-                .can_decode()
-                .then(|| image_texture(clip, library))
-                .flatten()
-                .map(|texture| gtk::Picture::for_paintable(&texture))
-                .unwrap_or_else(|| gtk::Picture::for_filename(library.thumbnail_path(clip.id)));
+            let thumbnail = library.thumbnail_path(clip.id);
+            let picture = match size.can_decode().then(|| image_texture(clip, library)).flatten() {
+                Some(texture) => gtk::Picture::for_paintable(&texture),
+                None if thumbnail.exists() => gtk::Picture::for_filename(thumbnail),
+                None => return placeholder("Image"),
+            };
             picture.set_content_fit(gtk::ContentFit::Contain);
             picture.set_can_shrink(true);
             picture.set_margin_start(12);
