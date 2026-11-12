@@ -193,6 +193,7 @@ impl Storage {
             }
             return Err(error);
         }
+        sync_dir(&self.payloads_dir())?;
         if replacing {
             let _ = fs::remove_dir_all(&old);
         }
@@ -264,7 +265,13 @@ pub fn write_private_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let mut file = create_private_file(&temp)?;
     file.write_all(bytes)?;
     file.sync_all()?;
-    fs::rename(&temp, path)
+    fs::rename(&temp, path)?;
+    sync_dir(dir)
+}
+
+/// Flushes the directory entries, so that a rename survives a crash.
+fn sync_dir(dir: &Path) -> io::Result<()> {
+    fs::File::open(dir)?.sync_all()
 }
 
 fn create_private_dir(dir: &Path) -> io::Result<()> {
