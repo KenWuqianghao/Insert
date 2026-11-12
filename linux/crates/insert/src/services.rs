@@ -165,7 +165,8 @@ impl Services {
 
     /// Sends the paste keys to the app that gets the focus when the tray is gone. Call it after
     /// the tray window hides. A terminal gets Shift+Insert, each other app Ctrl+V. If the desktop
-    /// reports no other app in front within `FOCUS_TIMEOUT`, no key is sent.
+    /// reports no other app in front within `FOCUS_TIMEOUT`, or the primary selection for a
+    /// terminal cannot be set, no key is sent.
     pub fn paste_into_front_app(&self) {
         let Some(injector) = self.inner.injector.borrow().clone() else {
             return;
@@ -188,11 +189,15 @@ impl Services {
                 }
             };
             let keys = PasteKeys::for_app(target.as_ref().map(|app| app.id.as_str()));
+            // A terminal that pastes the primary selection would paste old content.
             if keys == PasteKeys::ShiftInsert {
-                if let Some(watcher) = &*inner.watcher.borrow() {
-                    if let Err(error) = watcher.mirror_to_primary() {
-                        eprintln!("insert: cannot set the primary selection: {error}");
-                    }
+                let mirrored = match &*inner.watcher.borrow() {
+                    Some(watcher) => watcher.mirror_to_primary().map_err(|error| error.to_string()),
+                    None => Err("this desktop does not let Insert set it".to_owned()),
+                };
+                if let Err(error) = mirrored {
+                    eprintln!("insert: cannot set the primary selection: {error}; the clip is only copied");
+                    return;
                 }
             }
             if let Err(error) = injector.send_paste(keys).await {
