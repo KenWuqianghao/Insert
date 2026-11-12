@@ -66,6 +66,7 @@ pub enum ActiveAppError {
 
 #[derive(Default)]
 struct Focus {
+    /// `None` when no window is active or the active window has no app id.
     app: Option<ActiveApp>,
     insert_is_active: bool,
 }
@@ -110,8 +111,8 @@ impl ActiveAppTracker {
         Ok(Self { connection, focus, external_activations })
     }
 
-    /// The app of the last active window that is not a window of Insert. `None` until KWin
-    /// reports such a window.
+    /// The app of the last active window that is not a window of Insert. `None` when that
+    /// window has no app id, or when no window is active.
     pub fn current(&self) -> Option<ActiveApp> {
         self.focus.lock().expect("the lock is not poisoned").app.clone()
     }
@@ -138,24 +139,27 @@ struct Receiver {
 
 #[zbus::interface(name = "io.github.kenwuqianghao.Insert.ActiveApp")]
 impl Receiver {
-    /// KWin reports no window, with empty strings, between the tray and the next window. That
-    /// is not an external window yet, so the focus state and the last app stay.
     fn activated(&mut self, desktop_file: String, resource_class: String) {
         let id = if desktop_file.is_empty() { resource_class.clone() } else { desktop_file };
-        if id.is_empty() {
-            return;
-        }
         let insert_is_active = id == APP_ID;
         self.focus.lock().expect("the lock is not poisoned").insert_is_active = insert_is_active;
         if insert_is_active {
             return;
         }
-        let entry = self.entries.entry(id.clone()).or_insert_with(|| desktop_entry(&id)).clone();
-        let is_terminal = entry.terminal_emulator || TERMINAL_APP_IDS.contains(&app_id_key(&id).as_str());
-        let fallback = if resource_class.is_empty() { id.clone() } else { resource_class };
-        let source = SourceApp { name: entry.name.unwrap_or(fallback), id };
-        self.focus.lock().expect("the lock is not poisoned").app = Some(ActiveApp { source, is_terminal });
+        let app = (!id.is_empty()).then(|| {
+            let entry = self.entries.entry(id.clone()).or_insert_with(|| desktop_entry(&id)).clone();
+            let is_terminal = entry.terminal_emulator || TERMINAL_APP_IDS.contains(&app_id_key(&id).as_str());
+            let fallback = if resource_class.is_empty() { id.clone() } else { resource_class };
+            ActiveApp { source: SourceApp { name: entry.name.unwrap_or(fallback), id }, is_terminal }
+        });
+        self.focus.lock().expect("the lock is not poisoned").app = app;
         let _ = self.activated.try_send(());
+    }
+
+    /// KWin reports no window between the tray and the next window. That is not an external
+    /// window yet, so a paste keeps its wait for one.
+    fn no_window(&mut self) {
+        self.focus.lock().expect("the lock is not poisoned").app = None;
     }
 }
 
@@ -184,8 +188,12 @@ fn script_file() -> Result<PathBuf, ActiveAppError> {
 fn script_source(receiver: &str, tray_title: &str) -> String {
     format!(
         r#"function report(window) {{
+    if (!window) {{
+        callDBus("{receiver}", "{RECEIVER_PATH}", "{RECEIVER_INTERFACE}", "NoWindow");
+        return;
+    }}
     callDBus("{receiver}", "{RECEIVER_PATH}", "{RECEIVER_INTERFACE}", "Activated",
-        window ? String(window.desktopFileName) : "", window ? String(window.resourceClass) : "");
+        String(window.desktopFileName), String(window.resourceClass));
 }}
 function setUpTray(window) {{
     if (String(window.desktopFileName) !== "{APP_ID}" || String(window.caption) !== {tray_title:?}) {{
@@ -280,7 +288,22 @@ mod tests {
     }
 
     #[test]
-    fn no_active_window_is_not_an_external_window() {
+    fn no_active_window_has_no_app_and_is_not_an_external_window() {
+        let focus = Arc::new(Mutex::new(Focus::default()));
+        let (activated, activations) = async_channel::bounded(1);
+        let mut receiver = Receiver { focus: Arc::clone(&focus), activated, entries: HashMap::new() };
+        receiver.activated("zz.no.such.app".into(), "someclass".into());
+        receiver.activated(APP_ID.into(), "insert".into());
+        let _ = activations.try_recv();
+        receiver.no_window();
+        let focus = focus.lock().unwrap();
+        assert!(focus.insert_is_active);
+        assert_eq!(focus.app, None);
+        assert!(activations.try_recv().is_err(), "a wake-up for no window");
+    }
+
+    #[test]
+    fn a_window_with_no_app_id_is_an_external_window_with_no_app() {
         let focus = Arc::new(Mutex::new(Focus::default()));
         let (activated, activations) = async_channel::bounded(1);
         let mut receiver = Receiver { focus: Arc::clone(&focus), activated, entries: HashMap::new() };
@@ -289,8 +312,8 @@ mod tests {
         let _ = activations.try_recv();
         receiver.activated(String::new(), String::new());
         let focus = focus.lock().unwrap();
-        assert!(focus.insert_is_active);
-        assert_eq!(focus.app.as_ref().map(|app| app.source.id.as_str()), Some("zz.no.such.app"));
-        assert!(activations.try_recv().is_err(), "a wake-up for no window");
+        assert!(!focus.insert_is_active);
+        assert_eq!(focus.app, None);
+        assert!(activations.try_recv().is_ok(), "no wake-up for the window");
     }
 }
