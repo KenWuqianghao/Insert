@@ -1,4 +1,7 @@
 //! The app of the active window, from a KWin script that reports each window activation over D-Bus.
+//!
+//! The same script gives the tray window its role. A Wayland client cannot ask for these properties, and
+//! Plasma sends no activation token with a global shortcut, so KWin must set them.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -28,22 +31,35 @@ pub enum ActiveAppError {
     Unavailable(String),
 }
 
+#[derive(Default)]
+struct Focus {
+    /// The app of the last active window that is not a window of Insert.
+    app: Option<SourceApp>,
+    insert_is_active: bool,
+}
+
 pub struct ActiveAppTracker {
     connection: zbus::Connection,
-    current: Arc<Mutex<Option<SourceApp>>>,
+    focus: Arc<Mutex<Focus>>,
+    external_activations: async_channel::Receiver<()>,
 }
 
 impl ActiveAppTracker {
     /// Loads the script into KWin. Fails on a desktop that is not KDE Plasma.
-    pub async fn start() -> Result<Self, ActiveAppError> {
-        let current = Arc::new(Mutex::new(None));
+    ///
+    /// Each time Insert opens a window with the title `tray_title`, KWin gives it the keyboard focus, keeps it
+    /// above other windows, shows it on all desktops, and hides it from the taskbar, the pager and the window
+    /// switcher.
+    pub async fn start(tray_title: &str) -> Result<Self, ActiveAppError> {
+        let focus = Arc::new(Mutex::new(Focus::default()));
+        let (activated, external_activations) = async_channel::bounded(1);
         let connection = zbus::Connection::session().await.map_err(unavailable)?;
-        let receiver = Receiver { current: Arc::clone(&current), names: HashMap::new() };
+        let receiver = Receiver { focus: Arc::clone(&focus), activated, names: HashMap::new() };
         connection.object_server().at(RECEIVER_PATH, receiver).await.map_err(unavailable)?;
 
         let unique_name = connection.unique_name().ok_or_else(|| unavailable("no D-Bus name"))?;
         let script_file = script_file();
-        std::fs::write(&script_file, script_source(unique_name.as_str())).map_err(unavailable)?;
+        std::fs::write(&script_file, script_source(unique_name.as_str(), tray_title)).map_err(unavailable)?;
 
         // A script of an earlier run that did not stop cleanly still has this name.
         unload(&connection).await?;
@@ -59,22 +75,32 @@ impl ActiveAppTracker {
             .call_method(Some(KWIN_SERVICE), format!("{SCRIPTING_PATH}/Script{script_id}").as_str(), Some(SCRIPT_INTERFACE), "run", &())
             .await
             .map_err(unavailable)?;
-        Ok(Self { connection, current })
+        Ok(Self { connection, focus, external_activations })
     }
 
     /// The app of the active window. `None` when no window is active.
     /// A window of Insert does not change the value.
     pub fn current(&self) -> Option<SourceApp> {
-        self.current.lock().expect("the lock is not poisoned").clone()
+        self.focus.lock().expect("the lock is not poisoned").app.clone()
     }
 
-    pub async fn stop(self) {
+    /// Returns when the active window is not a window of Insert. Returns at once when that is already true.
+    pub async fn external_window_active(&self) {
+        while self.focus.lock().expect("the lock is not poisoned").insert_is_active {
+            if self.external_activations.recv().await.is_err() {
+                return;
+            }
+        }
+    }
+
+    pub async fn stop(&self) {
         let _ = unload(&self.connection).await;
     }
 }
 
 struct Receiver {
-    current: Arc<Mutex<Option<SourceApp>>>,
+    focus: Arc<Mutex<Focus>>,
+    activated: async_channel::Sender<()>,
     names: HashMap<String, Option<String>>,
 }
 
@@ -82,7 +108,9 @@ struct Receiver {
 impl Receiver {
     fn activated(&mut self, desktop_file: String, resource_class: String) {
         let id = if desktop_file.is_empty() { resource_class.clone() } else { desktop_file };
-        if id == APP_ID {
+        let insert_is_active = id == APP_ID;
+        self.focus.lock().expect("the lock is not poisoned").insert_is_active = insert_is_active;
+        if insert_is_active {
             return;
         }
         let app = (!id.is_empty()).then(|| {
@@ -90,7 +118,9 @@ impl Receiver {
             let fallback = if resource_class.is_empty() { id.clone() } else { resource_class };
             SourceApp { name: name.unwrap_or(fallback), id }
         });
-        *self.current.lock().expect("the lock is not poisoned") = app;
+        self.focus.lock().expect("the lock is not poisoned").app = app;
+        // A full channel already has a wake-up in it.
+        let _ = self.activated.try_send(());
     }
 }
 
@@ -115,13 +145,26 @@ fn script_file() -> PathBuf {
         .join(format!("{SCRIPT_NAME}.js"))
 }
 
-fn script_source(receiver: &str) -> String {
+fn script_source(receiver: &str, tray_title: &str) -> String {
     format!(
         r#"function report(window) {{
     callDBus("{receiver}", "{RECEIVER_PATH}", "{RECEIVER_INTERFACE}", "Activated",
         window ? String(window.desktopFileName) : "", window ? String(window.resourceClass) : "");
 }}
+function setUpTray(window) {{
+    if (String(window.desktopFileName) !== "{APP_ID}" || String(window.caption) !== {tray_title:?}) {{
+        return;
+    }}
+    window.skipTaskbar = true;
+    window.skipSwitcher = true;
+    window.skipPager = true;
+    window.keepAbove = true;
+    window.onAllDesktops = true;
+    workspace.activeWindow = window;
+}}
 workspace.windowActivated.connect(report);
+workspace.windowAdded.connect(setUpTray);
+workspace.windowList().forEach(setUpTray);
 report(workspace.activeWindow);
 "#
     )
@@ -165,14 +208,19 @@ mod tests {
 
     #[test]
     fn a_window_of_insert_keeps_the_last_external_app() {
-        let current = Arc::new(Mutex::new(None));
-        let mut receiver = Receiver { current: Arc::clone(&current), names: HashMap::new() };
+        let focus = Arc::new(Mutex::new(Focus::default()));
+        let (activated, _activations) = async_channel::bounded(1);
+        let mut receiver = Receiver { focus: Arc::clone(&focus), activated, names: HashMap::new() };
+        let state = || {
+            let focus = focus.lock().unwrap();
+            (focus.app.clone(), focus.insert_is_active)
+        };
         receiver.activated("zz.no.such.app".into(), "someclass".into());
         let external = Some(SourceApp { id: "zz.no.such.app".into(), name: "someclass".into() });
-        assert_eq!(*current.lock().unwrap(), external);
+        assert_eq!(state(), (external.clone(), false));
         receiver.activated(APP_ID.into(), "insert".into());
-        assert_eq!(*current.lock().unwrap(), external);
+        assert_eq!(state(), (external, true));
         receiver.activated(String::new(), String::new());
-        assert_eq!(*current.lock().unwrap(), None);
+        assert_eq!(state(), (None, false));
     }
 }

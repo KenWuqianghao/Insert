@@ -3,7 +3,7 @@
 use insert_platform::active_app::ActiveAppTracker;
 
 fn main() {
-    let tracker = match futures_lite::future::block_on(ActiveAppTracker::start()) {
+    let tracker = match futures_lite::future::block_on(ActiveAppTracker::start("Insert")) {
         Ok(tracker) => tracker,
         Err(error) => {
             println!("start failed: {error}");
