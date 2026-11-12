@@ -9,7 +9,7 @@ use gtk4 as gtk;
 use gtk::{gdk, glib, prelude::*};
 use insert_core::{select_targets, MimeMap, SourceApp};
 use insert_platform::active_app::ActiveAppTracker;
-use insert_platform::autostart::Autostart;
+use insert_platform::autostart::{self, Autostart};
 use insert_platform::clipboard::{ClipboardConfig, ClipboardEvent, ClipboardWatcher};
 use insert_platform::paste::{PasteError, PasteInjector, PasteKeys};
 use insert_platform::shortcut::{GlobalShortcut, ShortcutEvent};
@@ -237,7 +237,7 @@ impl Services {
             .ok_or("Insert cannot find your configuration folder.")?;
         let result = if enabled {
             // A first start with no arguments opens no window.
-            std::env::current_exe().and_then(|exe| autostart.enable(&exe, &[]))
+            autostart::program().and_then(|program| autostart.enable(&program, &[]))
         } else {
             autostart.disable()
         };

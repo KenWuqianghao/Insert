@@ -63,6 +63,30 @@ impl Autostart {
     }
 }
 
+/// The program for the autostart entry: `~/.local/bin/insert` when it is an executable file (`install.sh`
+/// puts Insert there), else the running program.
+pub fn program() -> io::Result<PathBuf> {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    Ok(program_for(home.as_deref(), std::env::current_exe()?))
+}
+
+fn program_for(home: Option<&Path>, current_exe: PathBuf) -> PathBuf {
+    if let Some(installed) = home.map(|home| home.join(".local/bin/insert")).filter(|path| is_executable(path)) {
+        return installed;
+    }
+    // After the file is replaced, for example by a new install, Linux adds this suffix to the path of the
+    // running program.
+    match current_exe.to_str().and_then(|path| path.strip_suffix(" (deleted)")) {
+        Some(path) => PathBuf::from(path),
+        None => current_exe,
+    }
+}
+
+fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt as _;
+    fs::metadata(path).is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
+}
+
 /// Quotes one argument for the `Exec` key of the Desktop Entry Specification.
 fn quote_exec_arg(arg: &str) -> String {
     let mut quoted = String::from("\"");
@@ -106,6 +130,24 @@ mod tests {
         autostart.disable().unwrap();
         assert!(!autostart.is_enabled());
         autostart.disable().unwrap();
+        fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn the_program_is_the_installed_binary_else_the_running_one_without_the_deleted_suffix() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let home = temp_config_home("program");
+        let running = PathBuf::from("/opt/insert/insert (deleted)");
+        assert_eq!(program_for(Some(&home), running.clone()), Path::new("/opt/insert/insert"));
+        assert_eq!(program_for(None, PathBuf::from("/opt/insert/insert")), Path::new("/opt/insert/insert"));
+
+        let installed = home.join(".local/bin/insert");
+        fs::create_dir_all(installed.parent().unwrap()).unwrap();
+        fs::write(&installed, "").unwrap();
+        fs::set_permissions(&installed, fs::Permissions::from_mode(0o644)).unwrap();
+        assert_eq!(program_for(Some(&home), running.clone()), Path::new("/opt/insert/insert"));
+        fs::set_permissions(&installed, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(program_for(Some(&home), running), installed);
         fs::remove_dir_all(&home).unwrap();
     }
 
