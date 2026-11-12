@@ -16,6 +16,14 @@ use crate::tray::{Notices, Tray};
 
 const SAVE_DELAY: Duration = Duration::from_millis(500);
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum IndexSave {
+    Saved,
+    Pending,
+    /// The last save failed and is in the log. The next scheduled save and the quit try again.
+    Failed,
+}
+
 pub struct App {
     pub gtk_app: gtk::Application,
     pub services: Services,
@@ -26,6 +34,7 @@ pub struct App {
     settings: RefCell<Option<Rc<SettingsWindow>>>,
     captures: async_channel::Sender<(MimeMap, Option<SourceApp>)>,
     save_timer: RefCell<Option<glib::SourceId>>,
+    index_save: Cell<IndexSave>,
     pub library_notice: Cell<bool>,
     pub capture_notice: Cell<bool>,
     pub paste_status: Cell<PasteStatus>,
@@ -56,6 +65,7 @@ impl App {
             settings: RefCell::new(None),
             captures,
             save_timer: RefCell::new(None),
+            index_save: Cell::new(IndexSave::Saved),
             library_notice: Cell::new(opened.corrupt_backup.is_some()),
             capture_notice: Cell::new(false),
         });
@@ -188,6 +198,9 @@ impl App {
     }
 
     fn schedule_save(self: &Rc<Self>) {
+        if self.index_save.get() == IndexSave::Saved {
+            self.index_save.set(IndexSave::Pending);
+        }
         if self.save_timer.borrow().is_some() {
             return;
         }
@@ -202,16 +215,25 @@ impl App {
     }
 
     fn save_now(&self) {
-        if let Err(error) = self.library.borrow().save() {
-            eprintln!("insert: cannot save index.json: {error}");
+        if self.index_save.get() == IndexSave::Saved {
+            return;
+        }
+        match self.library.borrow().save() {
+            Ok(()) => self.index_save.set(IndexSave::Saved),
+            Err(error) => {
+                if self.index_save.get() == IndexSave::Pending {
+                    eprintln!("insert: cannot save index.json: {error}");
+                }
+                self.index_save.set(IndexSave::Failed);
+            }
         }
     }
 
     pub fn flush_save(&self) {
         if let Some(id) = self.save_timer.borrow_mut().take() {
             id.remove();
-            self.save_now();
         }
+        self.save_now();
     }
 
     fn change_prefs(self: &Rc<Self>, change: impl FnOnce(&mut Preferences)) {
