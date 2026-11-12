@@ -35,15 +35,6 @@ pub enum Shortcut {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum StatusMenuCommand {
-    ShowTray,
-    TogglePause,
-    ClearHistory,
-    OpenSettings,
-    Quit,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StatusIcon {
     pub visible: bool,
     pub paused: bool,
@@ -56,7 +47,7 @@ pub enum ServiceEvent {
     ShortcutChanged(Shortcut),
     PasteStatusChanged(PasteStatus),
     CaptureUnavailable,
-    StatusMenu(StatusMenuCommand),
+    StatusMenu(TrayEvent),
 }
 
 pub struct Services {
@@ -230,7 +221,7 @@ impl Services {
             return;
         };
         glib::spawn_future_local(async move {
-            if let Err(error) = shortcut.configure(None).await {
+            if let Err(error) = shortcut.configure().await {
                 eprintln!("insert: cannot open the shortcut settings: {error}");
             }
         });
@@ -331,13 +322,7 @@ impl Inner {
 
     async fn forward_status_menu(self: Rc<Self>, commands: async_channel::Receiver<TrayEvent>) {
         while let Ok(command) = commands.recv().await {
-            self.emit(ServiceEvent::StatusMenu(match command {
-                TrayEvent::ShowTray => StatusMenuCommand::ShowTray,
-                TrayEvent::TogglePause => StatusMenuCommand::TogglePause,
-                TrayEvent::ClearHistory => StatusMenuCommand::ClearHistory,
-                TrayEvent::OpenSettings => StatusMenuCommand::OpenSettings,
-                TrayEvent::Quit => StatusMenuCommand::Quit,
-            }));
+            self.emit(ServiceEvent::StatusMenu(command));
         }
     }
 }

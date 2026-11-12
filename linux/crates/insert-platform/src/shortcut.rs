@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use ashpd::desktop::global_shortcuts::{ConfigureShortcutsOptions, GlobalShortcuts, NewShortcut, Shortcut};
 use ashpd::desktop::Session;
-use ashpd::ActivationToken;
 use futures_lite::{future, stream, Stream, StreamExt};
 
 use crate::portal;
@@ -84,15 +83,15 @@ impl GlobalShortcut {
     }
 
     /// Opens the desktop's dialog to change the trigger. The new trigger arrives as `TriggerChanged`.
-    pub async fn configure(&self, activation_token: Option<String>) -> Result<(), ShortcutError> {
+    pub async fn configure(&self) -> Result<(), ShortcutError> {
         if !self.can_configure() {
             return Err(ShortcutError::ConfigureNotSupported);
         }
-        let options =
-            ConfigureShortcutsOptions::default().set_activation_token(activation_token.map(ActivationToken::from));
-        self.portal.configure_shortcuts(&self.session, None, options).await.map_err(unavailable)
+        self.portal
+            .configure_shortcuts(&self.session, None, ConfigureShortcutsOptions::default())
+            .await
+            .map_err(unavailable)
     }
-
 }
 
 impl Drop for GlobalShortcut {

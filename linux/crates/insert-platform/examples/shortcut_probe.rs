@@ -15,7 +15,7 @@ fn main() {
         };
         println!("connected, can_configure={}", shortcut.can_configure());
         if configure {
-            println!("configure: {:?}", shortcut.configure(None).await);
+            println!("configure: {:?}", shortcut.configure().await);
         }
         while let Ok(event) = receiver.recv().await {
             println!("{event:?}");

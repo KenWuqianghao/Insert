@@ -217,9 +217,7 @@ impl Device {
             }
         }
     }
-}
 
-impl Device {
     /// `zwlr-data-control` has the primary selection from version 2.
     fn has_primary_selection(&self) -> bool {
         match self {

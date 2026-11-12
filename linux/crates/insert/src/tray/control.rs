@@ -100,13 +100,11 @@ impl App {
             };
             command_for_key(key, modifiers, context)
         };
-        match command {
-            Some(command) => {
-                self.run_command(command);
-                true
-            }
-            None => false,
-        }
+        let Some(command) = command else {
+            return false;
+        };
+        self.run_command(command);
+        true
     }
 
     fn run_command(self: &Rc<Self>, command: PanelCommand) {
@@ -169,9 +167,8 @@ impl App {
 
     fn change_selection(self: &Rc<Self>, change: impl FnOnce(&mut Selection, &[ClipId])) {
         {
-            let mut model = self.tray.model.borrow_mut();
-            let visible = model.visible.clone();
-            change(&mut model.selection, &visible);
+            let model = &mut *self.tray.model.borrow_mut();
+            change(&mut model.selection, &model.visible);
         }
         self.render_tray();
     }
@@ -357,9 +354,12 @@ impl App {
             return;
         };
         let commit = self.library.borrow_mut().commit_name(&target, text);
-        self.tray.model.borrow_mut().state = TrayState::Browsing;
-        if let Some(scope) = commit.switch_to {
-            self.tray.model.borrow_mut().scope = scope;
+        {
+            let mut model = self.tray.model.borrow_mut();
+            model.state = TrayState::Browsing;
+            if let Some(scope) = commit.switch_to {
+                model.scope = scope;
+            }
         }
         self.apply(commit.change);
         if commit.switch_to.is_some() {
@@ -394,8 +394,10 @@ impl App {
         clip_action("copy", |app, id| app.activate(id, PasteAction::Copy));
         clip_action("rename-clip", |app, id| app.begin_naming(NameTarget::Clip(id)));
         clip_action("preview", |app, id| {
-            app.tray.model.borrow_mut().selection = Selection::only(Some(id));
-            app.tray.model.borrow_mut().state = TrayState::Previewing;
+            let mut model = app.tray.model.borrow_mut();
+            model.selection = Selection::only(Some(id));
+            model.state = TrayState::Previewing;
+            drop(model);
             app.render_tray();
         });
 

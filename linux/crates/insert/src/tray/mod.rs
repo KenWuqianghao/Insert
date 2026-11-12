@@ -600,10 +600,10 @@ impl Tray {
         self.preview_revealer.set_reveal_child(previewing);
 
         let naming = match &model.state {
-            TrayState::Naming(target) => Some(target.clone()),
+            TrayState::Naming(target) => Some(target),
             _ => None,
         };
-        if let Some(target) = &naming {
+        if let Some(target) = naming {
             if !self.prompt_revealer.reveals_child() {
                 self.prompt_title.set_text(target.prompt_title());
                 self.prompt_entry.set_text(&library.current_name(target));
@@ -621,7 +621,7 @@ impl Tray {
             .iter()
             .map(|p| (p.name.clone(), p.color.name().to_owned()))
             .collect();
-        if self.tabs_shown.borrow().as_ref() == Some(&(scope, key.clone())) {
+        if self.tabs_shown.borrow().as_ref().is_some_and(|(shown, names)| *shown == scope && *names == key) {
             return;
         }
         *self.tabs_shown.borrow_mut() = Some((scope, key));

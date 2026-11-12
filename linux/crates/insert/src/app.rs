@@ -7,11 +7,10 @@ use gtk::{gio, glib, prelude::*};
 use insert_core::{
     classify, Capture, Change, HistoryLimit, Library, MimeMap, Paths, Preferences, Skip, SourceApp, Storage,
 };
+use insert_platform::tray_icon::TrayEvent;
 use time::OffsetDateTime;
 
-use crate::services::{
-    PasteStatus, ServiceEvent, Services, Shortcut, StatusIcon, StatusMenuCommand,
-};
+use crate::services::{PasteStatus, ServiceEvent, Services, Shortcut, StatusIcon};
 use crate::settings::SettingsWindow;
 use crate::tray::{Notices, Tray};
 
@@ -113,11 +112,11 @@ impl App {
                 self.render_tray();
             }
             ServiceEvent::StatusMenu(command) => match command {
-                StatusMenuCommand::ShowTray => self.show_tray(None),
-                StatusMenuCommand::TogglePause => self.toggle_paused(),
-                StatusMenuCommand::ClearHistory => self.confirm_clear_history(),
-                StatusMenuCommand::OpenSettings => self.open_settings(),
-                StatusMenuCommand::Quit => self.quit(),
+                TrayEvent::ShowTray => self.show_tray(None),
+                TrayEvent::TogglePause => self.toggle_paused(),
+                TrayEvent::ClearHistory => self.confirm_clear_history(),
+                TrayEvent::OpenSettings => self.open_settings(),
+                TrayEvent::Quit => self.quit(),
             },
         }
     }
