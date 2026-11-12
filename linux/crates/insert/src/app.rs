@@ -157,7 +157,6 @@ impl App {
         if !change.needs_save() {
             return;
         }
-        self.tray.drop_cards(&change.removed);
         self.schedule_save();
         self.tray
             .model

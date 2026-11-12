@@ -537,6 +537,8 @@ impl Tray {
             .filter_map(|i| self.ids.string(i).map(|s| s.to_string()))
             .collect();
         let wanted: Vec<String> = model.visible.iter().map(ClipId::to_string).collect();
+        let visible: HashSet<ClipId> = model.visible.iter().copied().collect();
+        self.cards.borrow_mut().retain(|id, _| visible.contains(id));
         drop(model);
         if shown_ids != wanted {
             if !shown_ids.is_empty() {
@@ -713,13 +715,6 @@ impl Tray {
         self.cards.borrow_mut().insert(id, card);
     }
 
-    pub fn drop_cards(&self, ids: &[ClipId]) {
-        let mut cards = self.cards.borrow_mut();
-        for id in ids {
-            cards.remove(id);
-        }
-    }
-
     pub fn attach_card(&self, id: ClipId, item: &gtk::ListItem) {
         let Some(root) = self.card_widget(id) else { return };
         if self.appearing.borrow_mut().remove(&id) {
@@ -745,18 +740,11 @@ impl Tray {
 
     fn unbind_card(&self, item: &gtk::ListItem) {
         let Some(id) = item_clip_id(item) else { return };
-        let shown_here = {
-            let mut bound = self.bound.borrow_mut();
-            let shown_here = bound.get(&id).and_then(|weak| weak.upgrade()).as_ref() == Some(item);
-            if shown_here {
-                bound.remove(&id);
-            }
-            shown_here
-        };
-        item.set_child(gtk::Widget::NONE);
-        if shown_here {
-            self.cards.borrow_mut().remove(&id);
+        let mut bound = self.bound.borrow_mut();
+        if bound.get(&id).and_then(|weak| weak.upgrade()).as_ref() == Some(item) {
+            bound.remove(&id);
         }
+        item.set_child(gtk::Widget::NONE);
     }
 
     pub fn popup_menu(&self, model: &gio::Menu, from: &impl IsA<gtk::Widget>, x: f64, y: f64) {
