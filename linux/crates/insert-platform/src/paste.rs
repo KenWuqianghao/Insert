@@ -12,6 +12,7 @@ use crate::portal;
 
 const KEYSYM_CONTROL_L: i32 = 0xffe3;
 const KEYSYM_SHIFT_L: i32 = 0xffe1;
+const KEYSYM_SHIFT_R: i32 = 0xffe2;
 const KEYSYM_V: i32 = 0x0076;
 const KEYSYM_INSERT: i32 = 0xff63;
 
@@ -154,13 +155,16 @@ impl PasteInjector {
     /// Presses `keys` in the focused window.
     pub async fn send_paste(&self, keys: PasteKeys) -> Result<(), PasteError> {
         let (modifier, key) = keys.keysyms();
-        let steps = [
+        // The user can still hold Shift from Shift+Return. With it, Ctrl+V becomes Ctrl+Shift+V, the shortcut
+        // that opens Insert again.
+        let shift_release = [(KEYSYM_SHIFT_L, KeyState::Released), (KEYSYM_SHIFT_R, KeyState::Released)];
+        let paste = [
             (modifier, KeyState::Pressed),
             (key, KeyState::Pressed),
             (key, KeyState::Released),
             (modifier, KeyState::Released),
         ];
-        for (keysym, state) in steps {
+        for (keysym, state) in shift_release.into_iter().chain(paste) {
             self.portal
                 .notify_keyboard_keysym(&self.session, keysym, state, Default::default())
                 .await
