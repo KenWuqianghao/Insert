@@ -1,0 +1,23 @@
+[package]
+name = "insert"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+async-channel = "2.5.0"
+async-signal = "0.2.14"
+futures-lite = "2.6.1"
+gtk4 = { version = "0.11.5", features = ["v4_14"] }
+insert-core = { path = "../insert-core" }
+insert-platform = { path = "../insert-platform" }
+time = "0.3.55"
+uuid = "1.29.2"
+
+[features]
+# The actions test-key, test-capture, and test-action for the nested-KWin tests. They exist only
+# when INSERT_TEST_HOOKS=1 is set at start.
+test-hooks = []
+
+[dev-dependencies]
+tempfile = "3.27.0"

@@ -1,0 +1,21 @@
+[package]
+name = "insert-platform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# ashpd 0.14 remote_desktop imports screencast::Stream and does not enable that feature itself.
+ashpd = { version = "0.14.0", default-features = false, features = ["async-io", "global_shortcuts", "remote_desktop", "screencast"] }
+async-channel = "2.5.0"
+futures-lite = "2.6.1"
+insert-core = { path = "../insert-core" }
+ksni = { version = "0.3.7", default-features = false, features = ["async-io", "blocking"] }
+log = "0.4.35"
+serde = "1"
+rustix = { version = "1.1.6", features = ["event", "pipe", "fs"] }
+thiserror = "2.0.21"
+wayland-client = "0.31.15"
+wayland-protocols = { version = "0.32.13", features = ["client", "staging"] }
+wayland-protocols-wlr = { version = "0.3.12", features = ["client"] }
+zbus = "6.2.1"

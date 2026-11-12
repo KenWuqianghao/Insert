@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = ["crates/insert-core", "crates/insert-platform", "crates/insert"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+# gtk4 0.11 needs 1.92. Insert's own code needs 1.88 (slice::as_chunks).
+rust-version = "1.92"
+
+[profile.release]
+lto = "thin"
+strip = true
