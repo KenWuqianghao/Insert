@@ -13,6 +13,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use rustix::event::{poll, PollFd, PollFlags, Timespec};
+use rustix::fs::{fcntl_setfl, OFlags};
 use rustix::pipe::{pipe_with, PipeFlags};
 use wayland_client::backend::ObjectId;
 use wayland_client::globals::{registry_queue_init, GlobalListContents};
@@ -357,7 +358,10 @@ impl State {
             }
             return;
         };
-        let (read_end, write_end) = match pipe_with(PipeFlags::CLOEXEC) {
+        // Only the read end is nonblocking: the write end goes to the source app, which can expect blocking writes.
+        let pipe = pipe_with(PipeFlags::CLOEXEC)
+            .and_then(|(read_end, write_end)| fcntl_setfl(&read_end, OFlags::NONBLOCK).map(|()| (read_end, write_end)));
+        let (read_end, write_end) = match pipe {
             Ok(pipe) => pipe,
             Err(error) => {
                 self.stop = Some(Err(format!("cannot create a pipe: {error}")));
@@ -404,7 +408,8 @@ impl State {
                 read.data.extend_from_slice(&chunk[..count]);
                 read.deadline = Instant::now() + READ_IDLE_TIMEOUT;
             }
-            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+            // The poll result can be for a pipe that a new selection has replaced.
+            Err(error) if matches!(error.kind(), std::io::ErrorKind::Interrupted | std::io::ErrorKind::WouldBlock) => {}
             Err(error) => {
                 log::debug!("clipboard read of {} failed: {error}", read.mime);
                 transfer.current = None;
@@ -499,8 +504,7 @@ fn run(
             continue;
         };
 
-        let deadline = state.read_deadline();
-        let timeout = deadline.map(|deadline| {
+        let timeout = state.read_deadline().map(|deadline| {
             let left = deadline.saturating_duration_since(Instant::now());
             Timespec { tv_sec: left.as_secs() as i64, tv_nsec: left.subsec_nanos() as _ }
         });
@@ -532,7 +536,8 @@ fn run(
 
         if pipe_ready {
             state.pipe_readable();
-        } else if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+        }
+        if state.read_deadline().is_some_and(|deadline| Instant::now() >= deadline) {
             log::debug!("clipboard read timed out");
             state.abandon_transfer();
         }
