@@ -58,7 +58,7 @@ impl ActiveAppTracker {
         connection.object_server().at(RECEIVER_PATH, receiver).await.map_err(unavailable)?;
 
         let unique_name = connection.unique_name().ok_or_else(|| unavailable("no D-Bus name"))?;
-        let script_file = script_file();
+        let script_file = script_file()?;
         std::fs::write(&script_file, script_source(unique_name.as_str(), tray_title)).map_err(unavailable)?;
 
         // A script of an earlier run that did not stop cleanly still has this name.
@@ -141,11 +141,14 @@ async fn unload(connection: &zbus::Connection) -> Result<(), ActiveAppError> {
     scripting_call(connection, "unloadScript", &(SCRIPT_NAME,)).await.map(|_| ())
 }
 
-fn script_file() -> PathBuf {
+/// In the runtime directory, which only the user can write. A shared directory such as /tmp lets
+/// another user put a script there for KWin to run.
+fn script_file() -> Result<PathBuf, ActiveAppError> {
     std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir)
-        .join(format!("{SCRIPT_NAME}.js"))
+        .filter(|dir| dir.is_absolute())
+        .map(|dir| dir.join(format!("{SCRIPT_NAME}.js")))
+        .ok_or_else(|| unavailable("XDG_RUNTIME_DIR is not set"))
 }
 
 fn script_source(receiver: &str, tray_title: &str) -> String {
