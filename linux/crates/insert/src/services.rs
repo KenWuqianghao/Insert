@@ -2,12 +2,13 @@
 //! `Services` and hears about desktop events only through `ServiceEvent`.
 
 use std::cell::{Cell, RefCell};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Duration;
 
 use gtk4 as gtk;
 use gtk::{gdk, glib, prelude::*};
-use insert_core::{select_targets, MimeMap, SourceApp};
+use insert_core::{select_targets, MimeMap, Paths, SourceApp};
 use insert_platform::active_app::ActiveAppTracker;
 use insert_platform::autostart::{self, Autostart};
 use insert_platform::clipboard::{ClipboardConfig, ClipboardEvent, ClipboardWatcher};
@@ -85,6 +86,7 @@ struct Inner {
     watcher: RefCell<Option<ClipboardWatcher>>,
     gdk_clipboard: gdk::Clipboard,
     injector: RefCell<Option<Rc<PasteInjector>>>,
+    restore_token_file: PathBuf,
     paste_status: Cell<PasteStatus>,
     global_shortcut: RefCell<Option<Rc<GlobalShortcut>>>,
     shortcut: RefCell<Shortcut>,
@@ -95,7 +97,7 @@ struct Inner {
 }
 
 impl Services {
-    pub fn start(display: &gdk::Display) -> (Self, async_channel::Receiver<ServiceEvent>) {
+    pub fn start(display: &gdk::Display, paths: &Paths) -> (Self, async_channel::Receiver<ServiceEvent>) {
         let (events, receiver) = async_channel::unbounded();
         let (clipboard_events, clipboard_changes) = async_channel::unbounded();
         let (status_menu, status_menu_events) = async_channel::unbounded();
@@ -111,6 +113,7 @@ impl Services {
             watcher: RefCell::new(watcher),
             gdk_clipboard: display.clipboard(),
             injector: RefCell::new(None),
+            restore_token_file: paths.restore_token_file(),
             paste_status: Cell::new(PasteStatus::NeedsPermission),
             global_shortcut: RefCell::new(None),
             shortcut: RefCell::new(Shortcut::Unavailable),
@@ -291,7 +294,7 @@ impl Inner {
     }
 
     async fn connect_paste(&self, interactive: bool) {
-        let result = PasteInjector::connect(interactive).await;
+        let result = PasteInjector::connect(interactive, &self.restore_token_file).await;
         let status = match &result {
             Ok(_) => PasteStatus::Ready,
             Err(PasteError::NeedsPermission) => PasteStatus::NeedsPermission,

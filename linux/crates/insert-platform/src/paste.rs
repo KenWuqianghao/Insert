@@ -3,7 +3,7 @@
 use std::fs;
 use std::io;
 use std::os::unix::fs::OpenOptionsExt;
-use std::path::PathBuf;
+use std::path::Path;
 
 use ashpd::desktop::remote_desktop::{DeviceType, KeyState, RemoteDesktop, SelectDevicesOptions};
 use ashpd::desktop::{PersistMode, ResponseError, Session};
@@ -45,30 +45,12 @@ impl PasteKeys {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PasteStatus {
-    Ready,
-    /// The user must allow input injection. Call `PasteInjector::connect(true)` to show the dialog.
-    NeedsPermission,
-    Unavailable(String),
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum PasteError {
     #[error("the user did not allow input injection")]
     NeedsPermission,
     #[error("input injection is not available: {0}")]
     Unavailable(String),
-}
-
-impl PasteStatus {
-    pub fn of(result: &Result<PasteInjector, PasteError>) -> Self {
-        match result {
-            Ok(_) => Self::Ready,
-            Err(PasteError::NeedsPermission) => Self::NeedsPermission,
-            Err(PasteError::Unavailable(reason)) => Self::Unavailable(reason.clone()),
-        }
-    }
 }
 
 /// An open RemoteDesktop session with a keyboard device.
@@ -78,12 +60,11 @@ pub struct PasteInjector {
 }
 
 impl PasteInjector {
-    /// Opens the session. The portal shows its permission dialog when the stored restore token is missing or
-    /// no longer valid. With `interactive` false and no stored token, this returns `NeedsPermission` and
-    /// shows no dialog.
-    pub async fn connect(interactive: bool) -> Result<Self, PasteError> {
-        let token_file = restore_token_file();
-        let token = token_file.as_ref().and_then(|path| fs::read_to_string(path).ok());
+    /// Opens the session. The portal shows its permission dialog when the restore token in `token_file` is
+    /// missing or no longer valid. With `interactive` false and no stored token, this returns `NeedsPermission`
+    /// and shows no dialog.
+    pub async fn connect(interactive: bool, token_file: &Path) -> Result<Self, PasteError> {
+        let token = fs::read_to_string(token_file).ok();
         let token = token.as_deref().map(str::trim).filter(|token| !token.is_empty());
         if !interactive && token.is_none() {
             return Err(PasteError::NeedsPermission);
@@ -107,17 +88,17 @@ impl PasteInjector {
             Ok(started) if started.devices().contains(DeviceType::KEYBOARD) => started,
             Ok(_) => {
                 let _ = session.close().await;
-                store_token(token_file.as_deref(), None);
+                store_token(token_file, None);
                 return Err(PasteError::NeedsPermission);
             }
             Err(ashpd::Error::Response(ResponseError::Cancelled)) => {
-                store_token(token_file.as_deref(), None);
+                store_token(token_file, None);
                 return Err(PasteError::NeedsPermission);
             }
             Err(other) => return Err(unavailable(other)),
         };
         // A restore token is valid for one session only. The portal gives the next one here.
-        store_token(token_file.as_deref(), started.restore_token());
+        store_token(token_file, started.restore_token());
         Ok(Self { portal, session })
     }
 
@@ -153,17 +134,8 @@ fn unavailable(error: ashpd::Error) -> PasteError {
     PasteError::Unavailable(error.to_string())
 }
 
-fn restore_token_file() -> Option<PathBuf> {
-    let state_home = std::env::var_os("XDG_STATE_HOME")
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/state")))?;
-    Some(state_home.join("insert").join("remote-desktop-token"))
-}
-
 /// Writes `token` to `path`, or removes the file when there is no token.
-fn store_token(path: Option<&std::path::Path>, token: Option<&str>) {
-    let Some(path) = path else { return };
+fn store_token(path: &Path, token: Option<&str>) {
     let stored = match token {
         Some(token) => write_private(path, token),
         None => remove_if_present(path),
@@ -173,7 +145,7 @@ fn store_token(path: Option<&std::path::Path>, token: Option<&str>) {
     }
 }
 
-fn write_private(path: &std::path::Path, content: &str) -> io::Result<()> {
+fn write_private(path: &Path, content: &str) -> io::Result<()> {
     use std::io::Write as _;
     fs::create_dir_all(path.parent().expect("the token file has a parent"))?;
     let temp = path.with_extension("tmp");
@@ -182,7 +154,7 @@ fn write_private(path: &std::path::Path, content: &str) -> io::Result<()> {
     fs::rename(&temp, path)
 }
 
-fn remove_if_present(path: &std::path::Path) -> io::Result<()> {
+fn remove_if_present(path: &Path) -> io::Result<()> {
     match fs::remove_file(path) {
         Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
         _ => Ok(()),

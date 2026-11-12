@@ -42,8 +42,8 @@ pub struct App {
 impl App {
     pub fn start(gtk_app: &gtk::Application) -> Rc<Self> {
         let display = gtk::gdk::Display::default().expect("a display");
-        let (services, events) = Services::start(&display);
         let paths = Paths::from_env();
+        let (services, events) = Services::start(&display, &paths);
         let mut prefs = Preferences::load(&paths.preferences_file());
         prefs.launch_at_login = services.launch_at_login();
         let opened = Library::open(Storage::new(paths.data_dir.clone()), prefs.history_limit);

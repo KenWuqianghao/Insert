@@ -37,11 +37,9 @@ macro_rules! with_app {
 }
 pub(crate) use with_app;
 
-const APP_ID: &str = "io.github.kenwuqianghao.Insert";
-
 fn main() -> glib::ExitCode {
     let gtk_app = gtk::Application::builder()
-        .application_id(APP_ID)
+        .application_id(insert_platform::APP_ID)
         .flags(gio::ApplicationFlags::HANDLES_COMMAND_LINE)
         .build();
     gtk_app.add_main_option(

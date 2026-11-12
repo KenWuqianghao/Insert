@@ -3,8 +3,10 @@ name = "insert-platform"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
 
 [dependencies]
+# ashpd 0.14 remote_desktop imports screencast::Stream and does not enable that feature itself.
 ashpd = { version = "0.14.0", default-features = false, features = ["async-io", "global_shortcuts", "remote_desktop", "screencast"] }
 async-channel = "2.5.0"
 futures-lite = "2.6.1"

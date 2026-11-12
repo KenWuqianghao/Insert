@@ -24,7 +24,7 @@ pub struct Paths {
     pub data_dir: PathBuf,
     /// Preferences: `$XDG_CONFIG_HOME/insert`.
     pub config_dir: PathBuf,
-    /// Portal restore tokens: `$XDG_STATE_HOME/insert`.
+    /// The portal restore token: `$XDG_STATE_HOME/insert`.
     pub state_dir: PathBuf,
 }
 
@@ -47,17 +47,13 @@ impl Paths {
         }
     }
 
-    /// All three directories under one root, for tests and for a private profile.
-    pub fn under(root: &Path) -> Self {
-        Self {
-            data_dir: root.join("data"),
-            config_dir: root.join("config"),
-            state_dir: root.join("state"),
-        }
-    }
-
     pub fn preferences_file(&self) -> PathBuf {
         self.config_dir.join("preferences.json")
+    }
+
+    /// The token that lets "paste directly" start with no permission dialog.
+    pub fn restore_token_file(&self) -> PathBuf {
+        self.state_dir.join("remote-desktop-token")
     }
 }
 
