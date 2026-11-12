@@ -12,7 +12,7 @@ use time::OffsetDateTime;
 
 use super::card::Card;
 use super::menus;
-use super::model::{Activation, TrayState};
+use super::model::{Paste, TrayState};
 use crate::app::App;
 use crate::services::PasteStatus;
 use crate::with_app;
@@ -42,10 +42,10 @@ impl App {
         self.tray.present(activation_token);
     }
 
-    pub fn hide_tray(self: &Rc<Self>, then: Option<Activation>) {
+    pub fn hide_tray(self: &Rc<Self>, then: Option<Paste>) {
         if self.tray.model.borrow().state == TrayState::Hidden {
-            if let Some(then) = then {
-                self.finish_activation(then);
+            if then.is_some() {
+                self.services.paste_into_front_app();
             }
             return;
         }
@@ -70,8 +70,8 @@ impl App {
         }
         self.tray.window.set_visible(false);
         let then = self.tray.model.borrow_mut().did_hide();
-        if let Some(then) = then {
-            self.finish_activation(then);
+        if then.is_some() {
+            self.services.paste_into_front_app();
         }
     }
 
@@ -194,26 +194,13 @@ impl App {
         if let Err(error) = &copied {
             eprintln!("insert: cannot set the clipboard: {error}");
         }
-        self.hide_tray(Some(Activation {
-            id,
-            action,
-            copied: copied.is_ok(),
-        }));
-    }
-
-    fn finish_activation(self: &Rc<Self>, activation: Activation) {
-        let change = self
-            .library
-            .borrow_mut()
-            .move_to_front(activation.id, OffsetDateTime::now_utc());
+        let change = self.library.borrow_mut().move_to_front(id, OffsetDateTime::now_utc());
         self.apply(change);
-        let paste = activation.copied
-            && activation.action != PasteAction::Copy
+        let paste = copied.is_ok()
+            && action != PasteAction::Copy
             && self.prefs.borrow().paste_directly
             && self.services.paste_status() == PasteStatus::Ready;
-        if paste {
-            self.services.paste_into_front_app();
-        }
+        self.hide_tray(paste.then_some(Paste));
     }
 
     fn delete(self: &Rc<Self>, ids: HashSet<ClipId>) {

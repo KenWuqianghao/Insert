@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use insert_core::{ClipId, ClipKind, Library, NameTarget, PasteAction, Scope, Selection, TrayMode};
+use insert_core::{ClipId, ClipKind, Library, NameTarget, Scope, Selection, TrayMode};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TrayState {
@@ -8,15 +8,12 @@ pub enum TrayState {
     Browsing,
     Previewing,
     Naming(NameTarget),
-    Hiding { then: Option<Activation> },
+    Hiding { then: Option<Paste> },
 }
 
+/// Paste into the front app when the hide ends.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Activation {
-    pub id: ClipId,
-    pub action: PasteAction,
-    pub copied: bool,
-}
+pub struct Paste;
 
 #[derive(Debug)]
 pub struct TrayModel {
@@ -85,13 +82,14 @@ impl TrayModel {
 
     pub fn prepare_show(&mut self, library: &Library) {
         self.state = TrayState::Browsing;
+        self.ctrl_held = false;
         self.kind = None;
         self.query.clear();
         self.scope = library.resolve_scope(self.scope);
         self.reset_selection(library);
     }
 
-    pub fn begin_hide(&mut self, then: Option<Activation>) -> bool {
+    pub fn begin_hide(&mut self, then: Option<Paste>) -> bool {
         match &mut self.state {
             TrayState::Hiding { then: pending } => {
                 if then.is_some() {
@@ -106,8 +104,7 @@ impl TrayModel {
         }
     }
 
-    pub fn did_hide(&mut self) -> Option<Activation> {
-        self.ctrl_held = false;
+    pub fn did_hide(&mut self) -> Option<Paste> {
         match std::mem::replace(&mut self.state, TrayState::Hidden) {
             TrayState::Hiding { then } => then,
             _ => None,
@@ -172,23 +169,14 @@ mod tests {
         assert_eq!(model.key_mode(), Some(TrayMode::Naming));
     }
 
-    fn activation(library: &Library) -> Activation {
-        Activation {
-            id: library.visible(Scope::History, None, "")[0].id,
-            action: PasteAction::Paste,
-            copied: true,
-        }
-    }
-
     #[test]
     fn a_hide_finishes_the_activation_that_started_it() {
         let (_dir, library) = library_with(&["one"]);
         let mut model = TrayModel::new();
         model.prepare_show(&library);
-        let paste = activation(&library);
-        assert!(model.begin_hide(Some(paste)));
+        assert!(model.begin_hide(Some(Paste)));
         assert!(!model.begin_hide(None));
-        assert_eq!(model.did_hide(), Some(paste));
+        assert_eq!(model.did_hide(), Some(Paste));
         assert_eq!(model.state, TrayState::Hidden);
     }
 
@@ -197,8 +185,10 @@ mod tests {
         let (_dir, library) = library_with(&["one"]);
         let mut model = TrayModel::new();
         model.prepare_show(&library);
-        assert!(model.begin_hide(Some(activation(&library))));
+        assert!(model.begin_hide(Some(Paste)));
+        model.ctrl_held = true;
         model.prepare_show(&library);
+        assert!(!model.ctrl_held);
         assert!(model.begin_hide(None));
         assert_eq!(model.did_hide(), None);
     }
