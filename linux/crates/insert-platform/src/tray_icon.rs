@@ -63,6 +63,7 @@ impl InsertTray {
 }
 
 impl ksni::Tray for InsertTray {
+    // The macOS menu bar item opens its menu on a click.
     const MENU_ON_ACTIVATE: bool = true;
 
     fn id(&self) -> String {

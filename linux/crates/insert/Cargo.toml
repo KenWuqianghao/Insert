@@ -15,6 +15,8 @@ time = "0.3.55"
 uuid = "1.29.2"
 
 [features]
+# The actions test-key, test-capture, and test-action for the nested-KWin tests. They exist only
+# when INSERT_TEST_HOOKS=1 is set at start.
 test-hooks = []
 
 [dev-dependencies]

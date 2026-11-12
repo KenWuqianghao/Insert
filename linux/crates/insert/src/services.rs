@@ -212,6 +212,7 @@ impl Services {
             .as_ref()
             .ok_or("Insert cannot find your configuration folder.")?;
         let result = if enabled {
+            // A start with no arguments opens no window.
             autostart::program().and_then(|program| autostart.enable(&program, &[]))
         } else {
             autostart.disable()

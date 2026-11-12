@@ -1,5 +1,7 @@
-//! A Wayland client cannot give its own window the tray role, and Plasma sends no activation token with a
-//! global shortcut, so KWin must set them.
+//! The app of the active window, from a KWin script that reports each window activation over D-Bus.
+//!
+//! The same script gives the tray window its role and the focus. A Wayland client cannot do either for its
+//! own window, and Plasma sends no activation token with a global shortcut.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -153,6 +155,7 @@ impl Receiver {
             ActiveApp { source: SourceApp { name: entry.name.unwrap_or(fallback), id }, is_terminal }
         });
         self.focus.lock().expect("the lock is not poisoned").app = app;
+        // A full channel already holds a wake-up.
         let _ = self.activated.try_send(());
     }
 

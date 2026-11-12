@@ -171,6 +171,7 @@ impl App {
         self.tray.render(
             &self.library.borrow(),
             Notices {
+                // With no capture there is nothing to pause, and three notices do not fit in the tray width.
                 paused: prefs.capture_paused && !self.capture_notice.get(),
                 needs_paste_permission: prefs.paste_directly
                     && self.paste_status.get() == PasteStatus::NeedsPermission,

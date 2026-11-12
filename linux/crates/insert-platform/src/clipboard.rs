@@ -135,6 +135,7 @@ impl ClipboardWatcher {
 
     fn send(&self, command: Command) -> Result<(), ClipboardError> {
         self.commands.send(command).map_err(|_| ClipboardError::NotRunning)?;
+        // A full pipe already holds a wake-up.
         let _ = (&self.wake).write(&[1]);
         Ok(())
     }
@@ -311,6 +312,7 @@ struct State {
     transfer: Option<Transfer>,
     owned: Option<OwnedSelection>,
     owned_primary: Option<OwnedSelection>,
+    /// True until the first roundtrip ends, so the clipboard content at start gives no event.
     starting: bool,
     stop: Option<Result<(), String>>,
 }
@@ -438,6 +440,7 @@ impl State {
         let mut selections = self.owned.iter().chain(&self.owned_primary);
         let Some(owned) = selections.find(|owned| &owned.source.id() == source) else { return };
         let data = Arc::clone(&owned.data);
+        // A slow reader must not stop the event loop.
         std::thread::spawn(move || {
             if let Some(bytes) = data.get(&mime) {
                 let _ = File::from(fd).write_all(bytes);
