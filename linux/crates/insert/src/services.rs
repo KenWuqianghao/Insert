@@ -164,7 +164,8 @@ impl Services {
     }
 
     /// Sends the paste keys to the app that gets the focus when the tray is gone. Call it after
-    /// the tray window hides. A terminal gets Shift+Insert, each other app Ctrl+V.
+    /// the tray window hides. A terminal gets Shift+Insert, each other app Ctrl+V. If the desktop
+    /// reports no other app in front within `FOCUS_TIMEOUT`, no key is sent.
     pub fn paste_into_front_app(&self) {
         let Some(injector) = self.inner.injector.borrow().clone() else {
             return;
@@ -176,7 +177,8 @@ impl Services {
                 Some(tracker) => {
                     let focus = tracker.external_window_active();
                     if glib::future_with_timeout(FOCUS_TIMEOUT, focus).await.is_err() {
-                        eprintln!("insert: the target app did not get the focus in time");
+                        eprintln!("insert: the target app did not get the focus in time; the clip is only copied");
+                        return;
                     }
                     tracker.current()
                 }
