@@ -76,7 +76,7 @@ After a release, commit `Info.plist` here, then commit and deploy `appcast.xml` 
 
 The Sparkle signing key is in the login Keychain, in the item `https://sparkle-project.org` (account `ed25519`). Back up this item. If you lose it, the installed copies of Insert cannot accept updates. To export a backup file, run `vendor/Sparkle-2.10.1/bin/generate_keys -x <file>`. Keep the file in a safe place. The first time `sign_update` runs, the Keychain asks for permission. Click **Always Allow**.
 
-To see the download counts of each release, run `Tools/downloads.sh`. It reads the counts of this repository and of the Windows port from GitHub.
+To see the download counts of each release, run `Tools/downloads.sh`. It reads the counts of this repository and of the Windows and Linux ports from GitHub.
 
 `make notarize` notarizes and staples the DMG. It needs a Developer ID certificate and a `notarytool` profile, so it is for later. Run it before Sparkle signs the DMG.
 
@@ -159,7 +159,11 @@ dotnet build windows/Insert.Windows.sln
 
 ## Linux
 
-The Linux port is in [`linux/`](./linux). It is a Rust and GTK 4 app with the same tray, search, pinboards, and history model.
+The Linux-specific repo is available at:
+
+https://github.com/KenWuqianghao/insert-linux
+
+Download the release archive from [its releases](https://github.com/KenWuqianghao/insert-linux/releases/latest). The mirrored source is in [`linux/`](./linux). It is a Rust and GTK 4 app with the same tray, search, pinboards, and history model.
 
 ### Requirements
 
