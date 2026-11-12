@@ -19,8 +19,6 @@ use crate::app::App;
 use crate::services::PasteStatus;
 use crate::with_app;
 
-/// Time for the compositor to give focus back to the target app before Ctrl+V.
-const PASTE_DELAY: Duration = Duration::from_millis(150);
 const DELETE_ANIMATION: Duration = Duration::from_millis(160);
 
 impl App {
@@ -220,12 +218,7 @@ impl App {
                 && app.prefs.borrow().paste_directly
                 && app.services.paste_status() == PasteStatus::Ready;
             if paste {
-                let app = Rc::downgrade(&app);
-                glib::timeout_add_local_once(PASTE_DELAY, move || {
-                    if let Some(app) = app.upgrade() {
-                        app.services.send_paste();
-                    }
-                });
+                app.services.paste_into_front_app();
             }
         })));
     }
@@ -455,6 +448,10 @@ impl App {
         });
         simple("dismiss-library-notice", |app| {
             app.library_notice.set(false);
+            app.render_tray();
+        });
+        simple("dismiss-capture-notice", |app| {
+            app.capture_notice.set(false);
             app.render_tray();
         });
 

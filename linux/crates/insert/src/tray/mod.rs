@@ -23,11 +23,22 @@ use card::{set_class, Card, Ring};
 pub use keys::parse_test_key;
 use model::{TrayModel, TrayState};
 
+/// The desktop finds the tray window by this title to give it the focus and its role.
+pub const WINDOW_TITLE: &str = "Insert";
 const SHOW_MS: u32 = 220;
 const HIDE_MS: u32 = 160;
 const MODE_MS: u32 = 200;
 const STRIP_HEIGHT: i32 = 270;
 const MENU_FOCUS_GRACE: std::time::Duration = std::time::Duration::from_millis(150);
+
+/// Which notices the top bar shows.
+#[derive(Clone, Copy)]
+pub struct Notices {
+    pub paused: bool,
+    pub needs_paste_permission: bool,
+    pub library_unreadable: bool,
+    pub capture_unavailable: bool,
+}
 
 /// A notice pill in the top bar.
 struct Notice {
@@ -71,6 +82,7 @@ pub struct Tray {
     pause_notice: Notice,
     paste_notice: Notice,
     library_notice: Notice,
+    capture_notice: Notice,
     filter_button: gtk::MenuButton,
     filter_label: gtk::Label,
     more_button: gtk::MenuButton,
@@ -101,7 +113,7 @@ impl Tray {
     pub fn new(app: &Weak<App>, gtk_app: &gtk::Application) -> Self {
         let window = gtk::ApplicationWindow::builder()
             .application(gtk_app)
-            .title("Insert")
+            .title(WINDOW_TITLE)
             .decorated(false)
             .build();
         window.add_css_class("tray-window");
@@ -177,6 +189,12 @@ impl Tray {
             "OK",
             "tray.dismiss-library-notice",
         );
+        let capture_notice = Notice::new(
+            &["dialog-warning-symbolic"],
+            "This desktop does not let Insert watch the clipboard.",
+            "OK",
+            "tray.dismiss-capture-notice",
+        );
         let pause_notice = Notice::new(
             &["media-playback-pause-symbolic"],
             "Capture is paused",
@@ -189,7 +207,7 @@ impl Tray {
             "Allow…",
             "tray.allow-paste",
         );
-        for notice in [&library_notice, &pause_notice, &paste_notice] {
+        for notice in [&library_notice, &capture_notice, &pause_notice, &paste_notice] {
             top_bar.append(&notice.root);
         }
 
@@ -315,6 +333,7 @@ impl Tray {
             pause_notice,
             paste_notice,
             library_notice,
+            capture_notice,
             filter_button,
             filter_label,
             more_button,
@@ -506,7 +525,7 @@ impl Tray {
     }
 
     /// Brings every widget in line with the model and the library.
-    pub fn render(&self, library: &Library, paused: bool, needs_paste_permission: bool, library_notice: bool) {
+    pub fn render(&self, library: &Library, notices: Notices) {
         self.rendering.set(true);
         let model = self.model.borrow();
 
@@ -517,9 +536,10 @@ impl Tray {
         self.search_clear.set_visible(!model.query.is_empty());
 
         self.render_tabs(library, model.scope);
-        self.pause_notice.root.set_visible(paused);
-        self.paste_notice.root.set_visible(needs_paste_permission);
-        self.library_notice.root.set_visible(library_notice);
+        self.pause_notice.root.set_visible(notices.paused);
+        self.paste_notice.root.set_visible(notices.needs_paste_permission);
+        self.library_notice.root.set_visible(notices.library_unreadable);
+        self.capture_notice.root.set_visible(notices.capture_unavailable);
         match model.kind {
             Some(kind) => {
                 self.filter_label.set_text(kind.name());
@@ -528,9 +548,9 @@ impl Tray {
             None => self.filter_label.set_visible(false),
         }
         set_class(&self.filter_button, "active", model.kind.is_some());
-        if self.more_paused.get() != Some(paused) {
-            self.more_paused.set(Some(paused));
-            self.more_button.set_menu_model(Some(&menus::more_menu(paused)));
+        if self.more_paused.get() != Some(notices.paused) {
+            self.more_paused.set(Some(notices.paused));
+            self.more_button.set_menu_model(Some(&menus::more_menu(notices.paused)));
         }
 
         let shown_ids: Vec<String> = (0..self.ids.n_items())

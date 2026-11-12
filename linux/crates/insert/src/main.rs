@@ -83,6 +83,7 @@ fn main() -> glib::ExitCode {
     gtk_app.connect_shutdown(move |_| {
         if let Some(app) = running.borrow().as_ref() {
             app.flush_save();
+            app.services.stop();
         }
     });
     gtk_app.run()

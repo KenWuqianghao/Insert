@@ -15,7 +15,7 @@ use crate::services::{
     PasteStatus, ServiceEvent, Services, Shortcut, StatusIcon, StatusMenuCommand,
 };
 use crate::settings::SettingsWindow;
-use crate::tray::Tray;
+use crate::tray::{Notices, Tray};
 
 const SAVE_DELAY: Duration = Duration::from_millis(500);
 
@@ -30,6 +30,9 @@ pub struct App {
     save_timer: RefCell<Option<glib::SourceId>>,
     /// The index did not parse at startup. The tray says so until the user dismisses it.
     pub library_notice: Cell<bool>,
+    /// The desktop does not let Insert watch the clipboard. The tray says so until the user
+    /// dismisses it.
+    pub capture_notice: Cell<bool>,
     pub paste_status: Cell<PasteStatus>,
     pub shortcut: RefCell<Shortcut>,
 }
@@ -58,6 +61,7 @@ impl App {
             settings: RefCell::new(None),
             save_timer: RefCell::new(None),
             library_notice: Cell::new(opened.corrupt_backup.is_some()),
+            capture_notice: Cell::new(false),
         });
         app.install_tray_actions();
         app.update_status_icon();
@@ -96,6 +100,10 @@ impl App {
                 self.paste_status.set(status);
                 self.render_tray();
                 self.refresh_settings();
+            }
+            ServiceEvent::CaptureUnavailable => {
+                self.capture_notice.set(true);
+                self.render_tray();
             }
             ServiceEvent::StatusMenu(command) => match command {
                 StatusMenuCommand::ShowTray => self.show_tray(None),
@@ -160,14 +168,17 @@ impl App {
 
     pub fn render_tray(&self) {
         let prefs = self.prefs.borrow();
-        let needs_permission =
-            prefs.paste_directly && self.paste_status.get() == PasteStatus::NeedsPermission;
         self.sync_kind_action();
         self.tray.render(
             &self.library.borrow(),
-            prefs.capture_paused,
-            needs_permission,
-            self.library_notice.get(),
+            Notices {
+                // With no capture there is nothing to pause, and three notices do not fit.
+                paused: prefs.capture_paused && !self.capture_notice.get(),
+                needs_paste_permission: prefs.paste_directly
+                    && self.paste_status.get() == PasteStatus::NeedsPermission,
+                library_unreadable: self.library_notice.get(),
+                capture_unavailable: self.capture_notice.get(),
+            },
         );
     }
 
