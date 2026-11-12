@@ -182,6 +182,7 @@ impl Storage {
             file.write_all(data)?;
             file.sync_all()?;
         }
+        sync_dir(&partial)?;
         let final_dir = self.payload_dir(id);
         let replacing = final_dir.exists();
         if replacing {
