@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use gtk4 as gtk;
 use gtk::{gdk, glib, prelude::*};
-use insert_core::{select_targets, MimeMap, Paths, SourceApp};
+use insert_core::{select_targets, MimeMap, Paths, SourceApp, MAX_READ_BYTES};
 use insert_platform::active_app::ActiveAppTracker;
 use insert_platform::autostart::{self, Autostart};
 use insert_platform::clipboard::{ClipboardConfig, ClipboardEvent, ClipboardWatcher};
@@ -76,6 +76,7 @@ impl Services {
         let (status_menu, status_menu_events) = async_channel::unbounded();
         let config = ClipboardConfig {
             select_mimes: Box::new(select_targets),
+            max_total_bytes: MAX_READ_BYTES as usize,
             ..Default::default()
         };
         let watcher = ClipboardWatcher::start(config, clipboard_events)

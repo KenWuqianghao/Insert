@@ -1,3 +1,5 @@
+use crate::capture::MAX_CAPTURE_BYTES;
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MimeMap(pub Vec<(String, Vec<u8>)>);
 
@@ -221,27 +223,30 @@ pub(crate) fn is_plain_stored(mime: &str) -> bool {
     is_rich_text(mime) || OTHER_STORED.contains(&mime) || is_media(mime) || is_volatile(mime)
 }
 
-/// The offered targets worth reading for capture: privacy markers, the best text target, the best
-/// image target, and the stored types. The platform can skip all other targets. Capture keeps one
-/// text entry, so the other text targets only cost time and count against the size limit.
+/// The most bytes that the platform reads for one clipboard change: the capture limit, and a
+/// second copy of the text from the second text target.
+pub const MAX_READ_BYTES: u64 = 2 * MAX_CAPTURE_BYTES;
+
+/// The offered targets worth reading for capture: privacy markers, the best two text targets, the
+/// best image target, and the stored types. The platform can skip all other targets. Capture keeps
+/// one text entry. The second text target is the fallback when the best one is empty or not UTF-8.
 pub fn select_targets(offered: &[String]) -> Vec<String> {
-    let best = |rank: fn(&str) -> Option<usize>| {
-        offered
-            .iter()
-            .filter_map(|mime| rank(mime).map(|rank| (rank, mime)))
-            .min()
-            .map(|(_, mime)| mime)
+    let ranked = |rank: fn(&str) -> Option<usize>, count: usize| {
+        let mut ranked: Vec<(usize, &String)> =
+            offered.iter().filter_map(|mime| rank(mime).map(|rank| (rank, mime))).collect();
+        ranked.sort();
+        ranked.into_iter().take(count).map(|(_, mime)| mime).collect::<Vec<_>>()
     };
-    let best_text = best(|mime| text_source(mime).map(|(rank, _)| rank));
-    let best_image = best(image_rank);
+    let texts = ranked(|mime| text_source(mime).map(|(rank, _)| rank), 2);
+    let image = ranked(image_rank, 1);
     offered
         .iter()
         .filter(|mime| {
             is_privacy_marker(mime)
                 || mime.as_str() == KDE_PASSWORD_HINT
                 || is_plain_stored(mime)
-                || Some(*mime) == best_text
-                || Some(*mime) == best_image
+                || texts.contains(mime)
+                || image.contains(mime)
         })
         .cloned()
         .collect()
@@ -288,13 +293,27 @@ mod tests {
     }
 
     #[test]
-    fn select_targets_keeps_the_best_text_target_only() {
+    fn select_targets_keeps_the_best_two_text_targets() {
         let offered: Vec<String> = ["STRING", "text/plain", "UTF8_STRING", "text/plain;charset=utf-8", "text/html"]
             .map(str::to_owned)
             .to_vec();
-        assert_eq!(select_targets(&offered), ["text/plain;charset=utf-8", "text/html"]);
+        assert_eq!(select_targets(&offered), ["UTF8_STRING", "text/plain;charset=utf-8", "text/html"]);
         let latin1_only = vec!["TEXT".to_owned(), "STRING".to_owned()];
         assert_eq!(select_targets(&latin1_only), ["STRING"]);
+    }
+
+    #[test]
+    fn the_second_text_target_replaces_an_empty_or_invalid_best_one() {
+        let offered = |best: &[u8]| -> MimeMap {
+            let all = [(UTF8_TEXT, best), ("UTF8_STRING", b"hi".as_slice()), ("STRING", b"latin")];
+            let selected = select_targets(&all.map(|(mime, _)| mime.to_owned()));
+            let read = all.into_iter().filter(|(mime, _)| selected.iter().any(|s| s == mime));
+            MimeMap(read.map(|(mime, data)| entry(mime, data)).collect())
+        };
+        for best in [b"".as_slice(), b"\xFF\xFE"] {
+            let capture = crate::classify(offered(best)).unwrap();
+            assert_eq!(capture.payload, MimeMap(vec![entry(UTF8_TEXT, b"hi")]));
+        }
     }
 
     #[test]

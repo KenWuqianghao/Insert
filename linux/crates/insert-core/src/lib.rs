@@ -17,7 +17,9 @@ pub use keys::{
 pub use library::{
     empty_state, Change, EmptyState, Library, NameCommit, NameTarget, Opened, Scope,
 };
-pub use mime::{is_secret_hint, select_targets, MimeMap, KDE_PASSWORD_HINT, UTF8_TEXT};
+pub use mime::{
+    is_secret_hint, select_targets, MimeMap, KDE_PASSWORD_HINT, MAX_READ_BYTES, UTF8_TEXT,
+};
 pub use model::{
     app_id_key, Clip, ClipContent, ClipId, ClipKind, ColorValue, ContentHash, Pinboard, PinboardColor,
     PinboardId, PixelSize, Rgb, SourceApp, TextSnippet,
