@@ -69,6 +69,7 @@ impl App {
             return;
         }
         self.tray.window.set_visible(false);
+        self.tray.drop_unbound_cards();
         let then = self.tray.model.borrow_mut().did_hide();
         if then.is_some() {
             self.services.paste_into_front_app();

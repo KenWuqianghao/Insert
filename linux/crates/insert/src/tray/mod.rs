@@ -711,6 +711,11 @@ impl Tray {
         self.cards.borrow().contains_key(&id)
     }
 
+    pub fn drop_unbound_cards(&self) {
+        let bound = self.bound.borrow();
+        self.cards.borrow_mut().retain(|id, _| bound.contains_key(id));
+    }
+
     pub fn insert_card(&self, id: ClipId, card: Card) {
         self.cards.borrow_mut().insert(id, card);
     }

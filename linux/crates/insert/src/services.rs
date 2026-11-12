@@ -138,9 +138,12 @@ impl Services {
             .map(|(mime, data)| gdk::ContentProvider::for_bytes(&mime, &glib::Bytes::from_owned(data)))
             .collect();
         let provider = gdk::ContentProvider::new_union(&providers);
-        // A terminal pastes the primary selection on Shift+Insert.
-        let primary = self.inner.gdk_primary.set_content(Some(&provider)).map_err(|error| error.to_string());
-        *self.inner.gdk_primary_written.borrow_mut() = primary;
+        // A terminal pastes the primary selection on Shift+Insert. Only the KWin tracker finds
+        // terminals, and GDK can set the selection only while Insert has the focus, so set it now.
+        if self.inner.active_app.borrow().is_some() {
+            let primary = self.inner.gdk_primary.set_content(Some(&provider)).map_err(|error| error.to_string());
+            *self.inner.gdk_primary_written.borrow_mut() = primary;
+        }
         self.inner.gdk_clipboard.set_content(Some(&provider)).map_err(|error| error.to_string())
     }
 
