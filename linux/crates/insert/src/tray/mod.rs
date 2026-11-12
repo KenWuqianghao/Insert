@@ -551,6 +551,10 @@ impl Tray {
         drop(model);
         if shown_ids != wanted {
             if !shown_ids.is_empty() {
+                let shown: HashSet<ClipId> = shown_ids
+                    .iter()
+                    .filter_map(|id| uuid::Uuid::parse_str(id).ok().map(ClipId))
+                    .collect();
                 let mut appearing = self.appearing.borrow_mut();
                 appearing.clear();
                 appearing.extend(
@@ -558,7 +562,7 @@ impl Tray {
                         .borrow()
                         .visible
                         .iter()
-                        .filter(|id| !shown_ids.contains(&id.to_string())),
+                        .filter(|id| !shown.contains(id)),
                 );
             }
             let refs: Vec<&str> = wanted.iter().map(String::as_str).collect();
