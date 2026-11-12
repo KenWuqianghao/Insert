@@ -57,8 +57,8 @@ pub struct SourceApp {
     pub name: String,
 }
 
-/// The form of an app id that is equal for all ids of one app. A window class and a desktop
-/// file id can differ in letter case, for example "konsole" and "org.kde.Konsole".
+/// The app id in lowercase, for comparisons that ignore letter case. A window class and a desktop
+/// file id can differ in letter case only, for example "org.kde.konsole" and "org.kde.Konsole".
 pub fn app_id_key(id: &str) -> String {
     id.to_ascii_lowercase()
 }
