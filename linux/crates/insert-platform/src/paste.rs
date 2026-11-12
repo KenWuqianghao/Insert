@@ -11,7 +11,63 @@ use ashpd::desktop::{PersistMode, ResponseError, Session};
 use crate::portal;
 
 const KEYSYM_CONTROL_L: i32 = 0xffe3;
+const KEYSYM_SHIFT_L: i32 = 0xffe1;
 const KEYSYM_V: i32 = 0x0076;
+const KEYSYM_INSERT: i32 = 0xff63;
+
+/// Terminals use Ctrl+V for a control character.
+const TERMINAL_APP_IDS: &[&str] = &[
+    "konsole",
+    "org.kde.konsole",
+    "yakuake",
+    "org.kde.yakuake",
+    "gnome-terminal",
+    "gnome-terminal-server",
+    "org.gnome.terminal",
+    "org.gnome.console",
+    "kgx",
+    "org.gnome.ptyxis",
+    "kitty",
+    "alacritty",
+    "foot",
+    "footclient",
+    "wezterm",
+    "org.wezfurlong.wezterm",
+    "ghostty",
+    "com.mitchellh.ghostty",
+    "xterm",
+    "tilix",
+    "com.gexperts.tilix",
+    "terminator",
+];
+
+/// The keys that paste in the app that has the focus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PasteKeys {
+    CtrlV,
+    /// For a terminal. Ctrl+Shift+V is not usable: it is the default shortcut of Insert, and the desktop
+    /// takes a global shortcut before the terminal gets the key. Some terminals paste the primary selection
+    /// on Shift+Insert, so the caller must put the content there too.
+    ShiftInsert,
+}
+
+impl PasteKeys {
+    /// `app_id` is the desktop file id or the window class of the app, in any letter case.
+    pub fn for_app(app_id: Option<&str>) -> Self {
+        match app_id {
+            Some(id) if TERMINAL_APP_IDS.contains(&id.to_ascii_lowercase().as_str()) => Self::ShiftInsert,
+            _ => Self::CtrlV,
+        }
+    }
+
+    /// The modifier key, then the key.
+    fn keysyms(self) -> (i32, i32) {
+        match self {
+            Self::CtrlV => (KEYSYM_CONTROL_L, KEYSYM_V),
+            Self::ShiftInsert => (KEYSYM_SHIFT_L, KEYSYM_INSERT),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PasteStatus {
@@ -95,15 +151,16 @@ impl PasteInjector {
         Ok(Self { portal, session })
     }
 
-    /// Sends Ctrl+V to the focused window.
-    pub async fn send_paste(&self) -> Result<(), PasteError> {
-        let keys = [
-            (KEYSYM_CONTROL_L, KeyState::Pressed),
-            (KEYSYM_V, KeyState::Pressed),
-            (KEYSYM_V, KeyState::Released),
-            (KEYSYM_CONTROL_L, KeyState::Released),
+    /// Presses `keys` in the focused window.
+    pub async fn send_paste(&self, keys: PasteKeys) -> Result<(), PasteError> {
+        let (modifier, key) = keys.keysyms();
+        let steps = [
+            (modifier, KeyState::Pressed),
+            (key, KeyState::Pressed),
+            (key, KeyState::Released),
+            (modifier, KeyState::Released),
         ];
-        for (keysym, state) in keys {
+        for (keysym, state) in steps {
             self.portal
                 .notify_keyboard_keysym(&self.session, keysym, state, Default::default())
                 .await
@@ -142,5 +199,18 @@ fn remove_if_present(path: &std::path::Path) -> io::Result<()> {
     match fs::remove_file(path) {
         Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
         _ => Ok(()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_terminal_gets_shift_insert() {
+        assert_eq!(PasteKeys::for_app(Some("org.kde.konsole")), PasteKeys::ShiftInsert);
+        assert_eq!(PasteKeys::for_app(Some("Alacritty")), PasteKeys::ShiftInsert);
+        assert_eq!(PasteKeys::for_app(Some("org.kde.kwrite")), PasteKeys::CtrlV);
+        assert_eq!(PasteKeys::for_app(None), PasteKeys::CtrlV);
     }
 }
