@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use ashpd::desktop::remote_desktop::{DeviceType, KeyState, RemoteDesktop, SelectDevicesOptions};
 use ashpd::desktop::{PersistMode, ResponseError, Session};
+use insert_core::app_id_key;
 
 use crate::portal;
 
@@ -53,10 +54,10 @@ pub enum PasteKeys {
 }
 
 impl PasteKeys {
-    /// `app_id` is the desktop file id or the window class of the app, in any letter case.
+    /// `app_id` is the desktop file id or the window class of the app.
     pub fn for_app(app_id: Option<&str>) -> Self {
         match app_id {
-            Some(id) if TERMINAL_APP_IDS.contains(&id.to_ascii_lowercase().as_str()) => Self::ShiftInsert,
+            Some(id) if TERMINAL_APP_IDS.contains(&app_id_key(id).as_str()) => Self::ShiftInsert,
             _ => Self::CtrlV,
         }
     }

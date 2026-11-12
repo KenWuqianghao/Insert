@@ -4,7 +4,7 @@ use std::path::Path;
 use serde_json::{json, Value};
 
 use crate::format::format_count;
-use crate::model::SourceApp;
+use crate::model::{app_id_key, SourceApp};
 use crate::storage::write_atomic;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -126,12 +126,18 @@ impl Preferences {
 
     /// True if a copy made while `source` is in front must not be saved.
     pub fn is_ignored(&self, source: Option<&SourceApp>) -> bool {
-        source.is_some_and(|source| self.ignored_apps.iter().any(|app| app.id == source.id))
+        source.is_some_and(|source| self.ignores_id(&source.id))
+    }
+
+    /// True if the list has an app with the same `app_id_key` as `id`.
+    pub fn ignores_id(&self, id: &str) -> bool {
+        let key = app_id_key(id);
+        self.ignored_apps.iter().any(|app| app_id_key(&app.id) == key)
     }
 
     /// Returns false if an app with the same id is already in the list.
     pub fn ignore_app(&mut self, app: SourceApp) -> bool {
-        if self.ignored_apps.iter().any(|ignored| ignored.id == app.id) {
+        if self.ignores_id(&app.id) {
             return false;
         }
         self.ignored_apps.push(app);
@@ -139,7 +145,8 @@ impl Preferences {
     }
 
     pub fn unignore_app(&mut self, id: &str) {
-        self.ignored_apps.retain(|app| app.id != id);
+        let key = app_id_key(id);
+        self.ignored_apps.retain(|app| app_id_key(&app.id) != key);
     }
 }
 
@@ -206,6 +213,7 @@ mod tests {
             name: "Other".into()
         }));
         assert!(prefs.is_ignored(Some(&app("a"))));
+        assert!(prefs.is_ignored(Some(&app("A"))));
         assert!(!prefs.is_ignored(Some(&app("b"))));
         assert!(!prefs.is_ignored(None));
         prefs.unignore_app("a");

@@ -50,11 +50,18 @@ impl Default for PinboardId {
 #[serde(transparent)]
 pub struct ContentHash(pub String);
 
-/// `id` is the desktop file id when known, else the window resource class.
+/// `id` is the desktop file id when known, else the window resource class. Compare ids with
+/// `app_id_key`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SourceApp {
     pub id: String,
     pub name: String,
+}
+
+/// The form of an app id that is equal for all ids of one app. A window class and a desktop
+/// file id can differ in letter case, for example "konsole" and "org.kde.Konsole".
+pub fn app_id_key(id: &str) -> String {
+    id.to_ascii_lowercase()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -631,3 +638,9 @@ mod tests {
         assert_eq!(PinboardColor::Blue.rgb(true).to_hex(), "#0A84FF");
     }
 }
+
+    #[test]
+    fn app_id_keys_ignore_letter_case() {
+        assert_eq!(app_id_key("org.keepassxc.KeePassXC"), app_id_key("org.keepassxc.keepassxc"));
+        assert_ne!(app_id_key("com.bitwarden.desktop"), app_id_key("com.bitwarden"));
+    }

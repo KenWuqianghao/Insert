@@ -8,6 +8,7 @@ license.workspace = true
 ashpd = { version = "0.14.0", default-features = false, features = ["async-io", "global_shortcuts", "remote_desktop", "screencast"] }
 async-channel = "2.5.0"
 futures-lite = "2.6.1"
+insert-core = { path = "../insert-core" }
 ksni = { version = "0.3.7", default-features = false, features = ["async-io", "blocking"] }
 log = "0.4.35"
 serde = "1"

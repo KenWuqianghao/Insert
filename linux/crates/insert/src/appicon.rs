@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use gtk4 as gtk;
 use gtk::{gdk, gdk_pixbuf::Pixbuf, gio, prelude::*};
-use insert_core::{header_tint, Rgb, SourceApp, NEUTRAL_TINT};
+use insert_core::{app_id_key, header_tint, Rgb, SourceApp, NEUTRAL_TINT};
 
 #[derive(Clone)]
 pub struct AppVisual {
@@ -34,13 +34,21 @@ pub fn app_visual(source: Option<&SourceApp>) -> AppVisual {
     visual
 }
 
-/// The installed app for a desktop file id, with or without the `.desktop` suffix.
+/// The installed app for a desktop file id.
 pub fn desktop_app(id: &str) -> Option<gio::AppInfo> {
-    let id = id.trim_end_matches(".desktop").to_lowercase();
-    gio::AppInfo::all().into_iter().find(|info| {
-        info.id()
-            .is_some_and(|found| found.trim_end_matches(".desktop").to_lowercase() == id)
-    })
+    let key = app_id_key(id);
+    gio::AppInfo::all()
+        .into_iter()
+        .find(|info| desktop_id(info).is_some_and(|found| app_id_key(&found) == key))
+}
+
+/// The desktop file id of an installed app. GIO adds the `.desktop` file suffix to the id.
+pub fn desktop_id(info: &gio::AppInfo) -> Option<String> {
+    info.id().map(|id| strip_desktop_suffix(&id).to_owned())
+}
+
+fn strip_desktop_suffix(file_name: &str) -> &str {
+    file_name.strip_suffix(".desktop").unwrap_or(file_name)
 }
 
 fn resolve(id: &str) -> Option<AppVisual> {
@@ -80,4 +88,15 @@ fn icon_pixels(icon: &gio::Icon) -> Option<Vec<u8>> {
             .flat_map(|row| bytes[row * stride..row * stride + width * 4].iter().copied())
             .collect(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_file_suffix_leaves_a_desktop_file_name() {
+        assert_eq!(strip_desktop_suffix("com.bitwarden.desktop.desktop"), "com.bitwarden.desktop");
+        assert_eq!(strip_desktop_suffix("org.kde.konsole.desktop"), "org.kde.konsole");
+    }
 }

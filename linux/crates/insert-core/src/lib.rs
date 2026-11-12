@@ -21,7 +21,7 @@ pub use library::{
 };
 pub use mime::{select_targets, MimeMap, UTF8_TEXT};
 pub use model::{
-    Clip, ClipContent, ClipId, ClipKind, ColorValue, ContentHash, Pinboard, PinboardColor,
+    app_id_key, Clip, ClipContent, ClipId, ClipKind, ColorValue, ContentHash, Pinboard, PinboardColor,
     PinboardId, PixelSize, Rgb, SourceApp, TextSnippet,
 };
 pub use prefs::{HistoryLimit, Preferences};

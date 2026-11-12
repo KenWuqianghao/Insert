@@ -8,7 +8,7 @@ use gtk::{gio, glib, prelude::*};
 use insert_core::{HistoryLimit, SourceApp};
 
 use crate::app::App;
-use crate::appicon::desktop_app;
+use crate::appicon::{desktop_app, desktop_id};
 use crate::services::{PasteStatus, Shortcut};
 use crate::theme::icon;
 use crate::with_app;
@@ -448,13 +448,12 @@ fn show_app_picker(app: &Rc<App>, parent: Option<&gtk::Window>) {
         .filter(|info| info.should_show())
         .collect();
     apps.sort_by_key(|info| info.display_name().to_lowercase());
-    let known: Vec<String> = app.prefs.borrow().ignored_apps.iter().map(|a| a.id.clone()).collect();
     let mut entries = Vec::new();
     for info in apps {
-        let Some(id) = info.id().map(|id| id.trim_end_matches(".desktop").to_owned()) else {
+        let Some(id) = desktop_id(&info) else {
             continue;
         };
-        if known.contains(&id) {
+        if app.prefs.borrow().ignores_id(&id) {
             continue;
         }
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
