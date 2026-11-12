@@ -11,6 +11,7 @@ use crate::mime::MimeMap;
 use crate::model::{Clip, ClipId, Pinboard};
 
 const APP_DIR: &str = "insert";
+const CORRUPT_INDEX_PREFIX: &str = "index.json.corrupt-";
 
 /// The XDG base directories of Insert.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -106,30 +107,42 @@ impl Storage {
         self.root.join("thumbnails")
     }
 
-    /// A missing index gives an empty library. An index that does not parse is renamed to
-    /// `index.json.corrupt-<unix time>` so that the next save cannot destroy it.
+    /// A missing index gives an empty library. An index that cannot be read or does not parse is
+    /// renamed to `index.json.corrupt-<unix time>` so that the next save cannot destroy it.
     pub fn load_index(&self) -> LoadedIndex {
         let path = self.index_path();
-        let empty = |corrupt_backup| LoadedIndex {
-            index: LibraryIndex::default(),
-            corrupt_backup,
+        let parsed = match fs::read(&path) {
+            Ok(bytes) => serde_json::from_slice(&bytes).ok(),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Some(LibraryIndex::default()),
+            Err(_) => None,
         };
-        let Ok(bytes) = fs::read(&path) else {
-            return empty(None);
-        };
-        match serde_json::from_slice(&bytes) {
-            Ok(index) => LoadedIndex {
+        if let Some(index) = parsed {
+            return LoadedIndex {
                 index,
                 corrupt_backup: None,
-            },
-            Err(_) => {
-                let seconds = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .map_or(0, |d| d.as_secs());
-                let backup = self.root.join(format!("index.json.corrupt-{seconds}"));
-                empty(fs::rename(&path, &backup).ok().map(|()| backup))
-            }
+            };
         }
+        let seconds = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let backup = self.root.join(format!("{CORRUPT_INDEX_PREFIX}{seconds}"));
+        LoadedIndex {
+            index: LibraryIndex::default(),
+            corrupt_backup: fs::rename(&path, &backup).ok().map(|()| backup),
+        }
+    }
+
+    /// True while an `index.json.corrupt-*` file exists. Its clips can own files that the
+    /// current index does not know.
+    pub fn has_corrupt_index_backup(&self) -> bool {
+        fs::read_dir(&self.root).is_ok_and(|entries| {
+            entries.flatten().any(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(CORRUPT_INDEX_PREFIX)
+            })
+        })
     }
 
     pub fn save_index(&self, clips: &[Clip], pinboards: &[Pinboard]) -> io::Result<()> {

@@ -136,8 +136,8 @@ pub struct Library {
 }
 
 impl Library {
-    /// Loads the index, drops clips whose payload is missing, and deletes orphan files. After a
-    /// corrupt index, the files stay until the next start, so the user can still recover them.
+    /// Loads the index, drops clips whose payload is missing, and deletes orphan files. While a
+    /// corrupt index backup exists, no file is deleted, so the user can still recover the clips.
     pub fn open(storage: Storage, history_limit: HistoryLimit) -> Opened {
         let loaded = storage.load_index();
         let clips: Vec<Clip> = loaded
@@ -146,7 +146,7 @@ impl Library {
             .into_iter()
             .filter(|clip| storage.has_payload(clip.id))
             .collect();
-        if loaded.corrupt_backup.is_none() {
+        if !storage.has_corrupt_index_backup() {
             storage.remove_orphans(&clips.iter().map(|clip| clip.id).collect());
         }
         let library = Library {
@@ -806,7 +806,7 @@ mod tests {
     }
 
     #[test]
-    fn corrupt_index_opens_an_empty_library() {
+    fn corrupt_index_opens_an_empty_library_and_keeps_the_files() {
         let Fixture {
             _dir,
             storage,
@@ -819,7 +819,31 @@ mod tests {
         assert!(reopened.corrupt_backup.is_some_and(|path| path.exists()));
         assert!(reopened.library.clips().is_empty());
         assert!(storage.has_payload(id));
+        reopened.library.save().unwrap();
+
+        let second = Library::open(storage.clone(), HistoryLimit::Clips100);
+        assert_eq!(second.corrupt_backup, None);
+        assert!(storage.has_payload(id));
+    }
+
+    #[test]
+    fn unreadable_index_is_moved_aside_and_keeps_the_files() {
+        let Fixture {
+            _dir,
+            storage,
+            mut library,
+        } = fixture(HistoryLimit::Clips100);
+        let id = insert(&mut library, "x");
+        let _ = std::fs::remove_file(storage.index_path());
+        std::fs::create_dir(storage.index_path()).unwrap();
+
+        let reopened = Library::open(storage.clone(), HistoryLimit::Clips100);
+        assert!(reopened.corrupt_backup.is_some_and(|path| path.is_dir()));
+        assert!(reopened.library.clips().is_empty());
+        assert!(!storage.index_path().exists());
+        reopened.library.save().unwrap();
+
         let _ = Library::open(storage.clone(), HistoryLimit::Clips100);
-        assert!(!storage.has_payload(id));
+        assert!(storage.has_payload(id));
     }
 }
