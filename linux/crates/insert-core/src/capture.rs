@@ -4,7 +4,7 @@ use image::{DynamicImage, ImageDecoder, ImageReader, Limits};
 use sha2::{Digest, Sha256};
 
 use crate::mime::{
-    image_rank, is_media, is_plain_stored, is_privacy_marker, is_rich_text, is_volatile,
+    image_rank, is_media, is_secret_hint, is_plain_stored, is_privacy_marker, is_rich_text, is_volatile,
     text_source, MimeMap, TextEncoding, COLOR, GNOME_COPIED_FILES, HTML, KDE_PASSWORD_HINT, PDF,
     UTF8_TEXT,
 };
@@ -51,7 +51,7 @@ pub fn classify(offer: MimeMap) -> Result<Capture, Skip> {
 
 fn is_concealed(offer: &MimeMap) -> bool {
     offer.0.iter().any(|(mime, data)| {
-        is_privacy_marker(mime) || (mime == KDE_PASSWORD_HINT && data.trim_ascii() == b"secret")
+        is_privacy_marker(mime) || (mime == KDE_PASSWORD_HINT && is_secret_hint(data))
     })
 }
 

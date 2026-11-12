@@ -132,7 +132,13 @@ pub(crate) const MOZ_URL: &str = "text/x-moz-url";
 pub(crate) const NETSCAPE_URL: &str = "_NETSCAPE_URL";
 pub(crate) const PDF: &str = "application/pdf";
 pub(crate) const COLOR: &str = "application/x-color";
-pub(crate) const KDE_PASSWORD_HINT: &str = "x-kde-passwordManagerHint";
+/// KDE password managers offer this type with the data `secret`.
+pub const KDE_PASSWORD_HINT: &str = "x-kde-passwordManagerHint";
+
+/// True when the data of a `KDE_PASSWORD_HINT` entry marks the clipboard content as a secret.
+pub fn is_secret_hint(data: &[u8]) -> bool {
+    data.trim_ascii() == b"secret"
+}
 
 const RICH_TEXT: [&str; 3] = ["text/rtf", "application/rtf", "text/richtext"];
 const OTHER_STORED: [&str; 9] = [

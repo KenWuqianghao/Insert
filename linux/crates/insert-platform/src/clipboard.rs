@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use insert_core::{is_secret_hint, KDE_PASSWORD_HINT};
 use rustix::event::{poll, PollFd, PollFlags, Timespec};
 use rustix::fs::{fcntl_setfl, OFlags};
 use rustix::pipe::{pipe_with, PipeFlags};
@@ -344,10 +345,14 @@ impl State {
             offer.destroy();
             return;
         }
-        let queue: VecDeque<String> = (self.select_mimes)(&mimes)
+        let mut queue: VecDeque<String> = (self.select_mimes)(&mimes)
             .into_iter()
             .filter(|mime| !X11_META_TARGETS.contains(&mime.as_str()))
             .collect();
+        // The hint goes first, so that a secret is never read.
+        if let Some(hint) = queue.iter().position(|mime| mime == KDE_PASSWORD_HINT).and_then(|index| queue.remove(index)) {
+            queue.push_front(hint);
+        }
         self.transfer = Some(Transfer { offer, queue, collected: Vec::new(), total: 0, current: None });
         self.start_next_read();
     }
@@ -391,6 +396,10 @@ impl State {
         match read.pipe.read(&mut chunk) {
             Ok(0) => {
                 let PipeRead { mime, data, .. } = transfer.current.take().expect("checked above");
+                if mime == KDE_PASSWORD_HINT && is_secret_hint(&data) {
+                    self.abandon_transfer();
+                    return;
+                }
                 // An empty entry still counts: privacy markers such as `org.nspasteboard.ConcealedType` have no data.
                 transfer.collected.push((mime, data));
                 self.start_next_read();
