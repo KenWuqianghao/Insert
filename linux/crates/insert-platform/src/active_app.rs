@@ -3,9 +3,10 @@
 //! The same script gives the tray window its role and the focus. A Wayland client cannot do either for its
 //! own window, and Plasma sends no activation token with a global shortcut.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use insert_core::{app_id_key, SourceApp};
 
@@ -18,6 +19,8 @@ const SCRIPT_INTERFACE: &str = "org.kde.kwin.Script";
 const SCRIPT_NAME: &str = "insert-active-app";
 const RECEIVER_PATH: &str = "/io/github/kenwuqianghao/Insert/ActiveApp";
 const RECEIVER_INTERFACE: &str = "io.github.kenwuqianghao.Insert.ActiveApp";
+/// The focus changes that `app_at` can look back through.
+const FOCUS_HISTORY: usize = 32;
 
 /// Terminals with no `TerminalEmulator` category in their desktop file, or with no desktop file.
 const TERMINAL_APP_IDS: &[&str] = &[
@@ -68,9 +71,28 @@ pub enum ActiveAppError {
 
 #[derive(Default)]
 struct Focus {
-    /// `None` when no window is active or the active window has no app id.
-    app: Option<ActiveApp>,
+    /// The last changes of the external app, oldest first. The app is `None` when no window is
+    /// active or the active window has no app id.
+    changes: VecDeque<(Instant, Option<ActiveApp>)>,
     insert_is_active: bool,
+}
+
+impl Focus {
+    fn set_app(&mut self, at: Instant, app: Option<ActiveApp>) {
+        if self.changes.len() == FOCUS_HISTORY {
+            self.changes.pop_front();
+        }
+        self.changes.push_back((at, app));
+    }
+
+    fn app(&self) -> Option<ActiveApp> {
+        self.changes.back()?.1.clone()
+    }
+
+    /// `None` also when `at` is older than the history.
+    fn app_at(&self, at: Instant) -> Option<ActiveApp> {
+        self.changes.iter().rev().find(|(changed_at, _)| *changed_at <= at)?.1.clone()
+    }
 }
 
 pub struct ActiveAppTracker {
@@ -116,7 +138,13 @@ impl ActiveAppTracker {
     /// The app of the last active window that is not a window of Insert. `None` when that
     /// window has no app id, or when no window is active.
     pub fn current(&self) -> Option<ActiveApp> {
-        self.focus.lock().expect("the lock is not poisoned").app.clone()
+        self.focus.lock().expect("the lock is not poisoned").app()
+    }
+
+    /// The app that `current` gave at the instant `at`. `None` also when `at` is older than the
+    /// last 32 focus changes.
+    pub fn app_at(&self, at: Instant) -> Option<ActiveApp> {
+        self.focus.lock().expect("the lock is not poisoned").app_at(at)
     }
 
     /// Returns when the active window is not a window of Insert. Returns at once when that is already true.
@@ -154,7 +182,7 @@ impl Receiver {
             let fallback = if resource_class.is_empty() { id.clone() } else { resource_class };
             ActiveApp { source: SourceApp { name: entry.name.unwrap_or(fallback), id }, is_terminal }
         });
-        self.focus.lock().expect("the lock is not poisoned").app = app;
+        self.focus.lock().expect("the lock is not poisoned").set_app(Instant::now(), app);
         // A full channel already holds a wake-up.
         let _ = self.activated.try_send(());
     }
@@ -162,7 +190,7 @@ impl Receiver {
     /// KWin reports no window between the tray and the next window. That is not an external
     /// window yet, so a paste keeps its wait for one.
     fn no_window(&mut self) {
-        self.focus.lock().expect("the lock is not poisoned").app = None;
+        self.focus.lock().expect("the lock is not poisoned").set_app(Instant::now(), None);
     }
 }
 
@@ -268,7 +296,7 @@ mod tests {
         let mut receiver = Receiver { focus: Arc::clone(&focus), activated, entries: HashMap::new() };
         let is_terminal = |receiver: &mut Receiver, id: &str| {
             receiver.activated(id.into(), String::new());
-            focus.lock().unwrap().app.as_ref().unwrap().is_terminal
+            focus.lock().unwrap().app().unwrap().is_terminal
         };
         assert!(is_terminal(&mut receiver, "Alacritty"));
         assert!(!is_terminal(&mut receiver, "zz.no.such.editor"));
@@ -281,7 +309,7 @@ mod tests {
         let mut receiver = Receiver { focus: Arc::clone(&focus), activated, entries: HashMap::new() };
         let state = || {
             let focus = focus.lock().unwrap();
-            (focus.app.as_ref().map(|app| app.source.clone()), focus.insert_is_active)
+            (focus.app().map(|app| app.source), focus.insert_is_active)
         };
         receiver.activated("zz.no.such.app".into(), "someclass".into());
         let external = Some(SourceApp { id: "zz.no.such.app".into(), name: "someclass".into() });
@@ -301,7 +329,7 @@ mod tests {
         receiver.no_window();
         let focus = focus.lock().unwrap();
         assert!(focus.insert_is_active);
-        assert_eq!(focus.app, None);
+        assert_eq!(focus.app(), None);
         assert!(activations.try_recv().is_err(), "a wake-up for no window");
     }
 
@@ -316,7 +344,30 @@ mod tests {
         receiver.activated(String::new(), String::new());
         let focus = focus.lock().unwrap();
         assert!(!focus.insert_is_active);
-        assert_eq!(focus.app, None);
+        assert_eq!(focus.app(), None);
         assert!(activations.try_recv().is_ok(), "no wake-up for the window");
+    }
+
+    #[test]
+    fn app_at_gives_the_app_that_had_the_focus_at_that_instant() {
+        let app = |id: &str| Some(ActiveApp { source: SourceApp { id: id.into(), name: id.into() }, is_terminal: false });
+        let start = Instant::now();
+        let second = |n: u64| start + std::time::Duration::from_secs(n);
+        let mut focus = Focus::default();
+        focus.set_app(second(1), app("kwrite"));
+        focus.set_app(second(3), None);
+        focus.set_app(second(5), app("firefox"));
+
+        assert_eq!(focus.app_at(second(0)), None);
+        assert_eq!(focus.app_at(second(1)), app("kwrite"));
+        assert_eq!(focus.app_at(second(2)), app("kwrite"));
+        assert_eq!(focus.app_at(second(4)), None);
+        assert_eq!(focus.app_at(second(9)), app("firefox"));
+
+        for n in 0..FOCUS_HISTORY as u64 {
+            focus.set_app(second(10 + n), app("konsole"));
+        }
+        assert_eq!(focus.app_at(second(9)), None, "a change older than the history");
+        assert_eq!(focus.app_at(second(10)), app("konsole"));
     }
 }

@@ -43,8 +43,9 @@ pub type MimeData = Vec<(String, Vec<u8>)>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClipboardEvent {
-    /// Another client changed the clipboard. An entry can have no data.
-    Changed { mimes: MimeData },
+    /// Another client changed the clipboard. An entry can have no data. `announced_at` is when the
+    /// compositor announced the new selection, before the reads.
+    Changed { mimes: MimeData, announced_at: Instant },
     /// The watcher stopped. No more events follow.
     Unavailable { reason: String },
 }
@@ -285,6 +286,7 @@ struct AnnouncedOffer {
 
 struct Transfer {
     offer: Offer,
+    announced_at: Instant,
     queue: VecDeque<String>,
     collected: MimeData,
     total: usize,
@@ -355,7 +357,7 @@ impl State {
         if let Some(hint) = queue.iter().position(|mime| mime == KDE_PASSWORD_HINT).and_then(|index| queue.remove(index)) {
             queue.push_front(hint);
         }
-        self.transfer = Some(Transfer { offer, queue, collected: Vec::new(), total: 0, current: None });
+        self.transfer = Some(Transfer { offer, announced_at: Instant::now(), queue, collected: Vec::new(), total: 0, current: None });
         self.start_next_read();
     }
 
@@ -365,7 +367,7 @@ impl State {
             let transfer = self.transfer.take().expect("checked above");
             transfer.offer.destroy();
             if !transfer.collected.is_empty() {
-                self.emit(ClipboardEvent::Changed { mimes: transfer.collected });
+                self.emit(ClipboardEvent::Changed { mimes: transfer.collected, announced_at: transfer.announced_at });
             }
             return;
         };

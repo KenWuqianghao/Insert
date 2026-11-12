@@ -1,7 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use gtk4 as gtk;
 use gtk::{gdk, glib, prelude::*};
@@ -42,7 +42,8 @@ pub struct StatusIcon {
 
 #[derive(Clone, Debug)]
 pub enum ServiceEvent {
-    ClipboardChanged { offer: MimeMap },
+    /// `copied_at` is when the clipboard changed, before Insert read the offer.
+    ClipboardChanged { offer: MimeMap, copied_at: Instant },
     ShortcutActivated { activation_token: Option<String> },
     ShortcutChanged(Shortcut),
     PasteStatusChanged(PasteStatus),
@@ -196,8 +197,8 @@ impl Services {
         glib::spawn_future_local(async move { inner.connect_paste(true).await });
     }
 
-    pub fn source_app(&self) -> Option<SourceApp> {
-        Some(self.inner.active_app.borrow().as_ref()?.current()?.source)
+    pub fn source_app_at(&self, at: Instant) -> Option<SourceApp> {
+        Some(self.inner.active_app.borrow().as_ref()?.app_at(at)?.source)
     }
 
     pub fn tracks_source_app(&self) -> bool {
@@ -319,8 +320,8 @@ impl Inner {
     async fn forward_clipboard(self: Rc<Self>, changes: async_channel::Receiver<ClipboardEvent>) {
         while let Ok(change) = changes.recv().await {
             match change {
-                ClipboardEvent::Changed { mimes } => {
-                    self.emit(ServiceEvent::ClipboardChanged { offer: MimeMap(mimes) });
+                ClipboardEvent::Changed { mimes, announced_at } => {
+                    self.emit(ServiceEvent::ClipboardChanged { offer: MimeMap(mimes), copied_at: announced_at });
                 }
                 ClipboardEvent::Unavailable { reason } => {
                     eprintln!("insert: clipboard capture is not available: {reason}");

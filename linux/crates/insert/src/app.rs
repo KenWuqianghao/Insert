@@ -1,6 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use gtk4 as gtk;
 use gtk::{gio, glib, prelude::*};
@@ -94,7 +94,7 @@ impl App {
 
     pub fn on_service_event(self: &Rc<Self>, event: ServiceEvent) {
         match event {
-            ServiceEvent::ClipboardChanged { offer } => self.capture(offer),
+            ServiceEvent::ClipboardChanged { offer, copied_at } => self.capture(offer, copied_at),
             ServiceEvent::ShortcutActivated { activation_token } => {
                 self.toggle_tray(activation_token.as_deref())
             }
@@ -121,8 +121,10 @@ impl App {
         }
     }
 
-    pub fn capture(&self, offer: MimeMap) {
-        let source = self.services.source_app();
+    /// The source is the app that had the focus at `copied_at`. The focus can change while
+    /// Insert reads the offer.
+    pub fn capture(&self, offer: MimeMap, copied_at: Instant) {
+        let source = self.services.source_app_at(copied_at);
         {
             let prefs = self.prefs.borrow();
             if prefs.capture_paused || prefs.is_ignored(source.as_ref()) {

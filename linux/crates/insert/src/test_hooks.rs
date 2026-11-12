@@ -47,7 +47,10 @@ pub fn install(app: &Rc<App>) {
         } else {
             MimeMap::from_plain_text(spec)
         };
-        app.on_service_event(ServiceEvent::ClipboardChanged { offer });
+        app.on_service_event(ServiceEvent::ClipboardChanged {
+            offer,
+            copied_at: std::time::Instant::now(),
+        });
     }));
     app.gtk_app.add_action(&capture);
 
