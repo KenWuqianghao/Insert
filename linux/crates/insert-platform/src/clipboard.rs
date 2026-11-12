@@ -34,8 +34,6 @@ use wayland_protocols_wlr::data_control::v1::client::{
 
 /// `set_clipboard` adds this type to each write. The watcher ignores offers that have it.
 pub const ORIGIN_MIME: &str = "application/x-insert-origin";
-/// KDE password managers set this type to `secret`.
-pub const CONCEALED_MIME: &str = "x-kde-passwordManagerHint";
 pub const DEFAULT_MAX_TOTAL_BYTES: usize = 50 * 1024 * 1024;
 
 const X11_META_TARGETS: [&str; 4] = ["TARGETS", "TIMESTAMP", "MULTIPLE", "SAVE_TARGETS"];
@@ -46,8 +44,8 @@ pub type MimeData = Vec<(String, Vec<u8>)>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClipboardEvent {
-    /// Another client changed the clipboard. An entry can have no data. `mimes` is empty when `concealed` is true.
-    Changed { mimes: MimeData, concealed: bool },
+    /// Another client changed the clipboard. An entry can have no data.
+    Changed { mimes: MimeData },
     /// The watcher stopped. No more events follow.
     Unavailable { reason: String },
 }
@@ -335,15 +333,10 @@ impl State {
             offer.destroy();
             return;
         }
-        let mut queue = VecDeque::new();
-        if mimes.iter().any(|mime| mime == CONCEALED_MIME) {
-            queue.push_back(CONCEALED_MIME.to_owned());
-        }
-        queue.extend(
-            (self.select_mimes)(&mimes)
-                .into_iter()
-                .filter(|mime| mime != CONCEALED_MIME && !X11_META_TARGETS.contains(&mime.as_str())),
-        );
+        let queue: VecDeque<String> = (self.select_mimes)(&mimes)
+            .into_iter()
+            .filter(|mime| !X11_META_TARGETS.contains(&mime.as_str()))
+            .collect();
         self.transfer = Some(Transfer { offer, queue, collected: Vec::new(), total: 0, current: None });
         self.start_next_read();
     }
@@ -354,7 +347,7 @@ impl State {
             let transfer = self.transfer.take().expect("checked above");
             transfer.offer.destroy();
             if !transfer.collected.is_empty() {
-                self.emit(ClipboardEvent::Changed { mimes: transfer.collected, concealed: false });
+                self.emit(ClipboardEvent::Changed { mimes: transfer.collected });
             }
             return;
         };
@@ -387,16 +380,8 @@ impl State {
         match read.pipe.read(&mut chunk) {
             Ok(0) => {
                 let PipeRead { mime, data, .. } = transfer.current.take().expect("checked above");
-                if mime == CONCEALED_MIME {
-                    if data == b"secret" {
-                        self.abandon_transfer();
-                        self.emit(ClipboardEvent::Changed { mimes: Vec::new(), concealed: true });
-                        return;
-                    }
-                } else {
-                    // An empty entry still counts: privacy markers such as `org.nspasteboard.ConcealedType` have no data.
-                    transfer.collected.push((mime, data));
-                }
+                // An empty entry still counts: privacy markers such as `org.nspasteboard.ConcealedType` have no data.
+                transfer.collected.push((mime, data));
                 self.start_next_read();
             }
             Ok(count) => {

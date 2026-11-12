@@ -177,10 +177,7 @@ fn install_test_hooks(app: &Rc<App>) {
         } else {
             MimeMap::from_plain_text(spec)
         };
-        app.on_service_event(ServiceEvent::ClipboardChanged {
-            offer,
-            concealed: false,
-        });
+        app.on_service_event(ServiceEvent::ClipboardChanged { offer });
     }));
     app.gtk_app.add_action(&capture);
 

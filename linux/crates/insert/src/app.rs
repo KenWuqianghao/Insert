@@ -102,7 +102,7 @@ impl App {
 
     pub fn on_service_event(self: &Rc<Self>, event: ServiceEvent) {
         match event {
-            ServiceEvent::ClipboardChanged { offer, concealed } => self.capture(offer, concealed),
+            ServiceEvent::ClipboardChanged { offer } => self.capture(offer),
             ServiceEvent::ShortcutActivated { activation_token } => {
                 self.toggle_tray(activation_token.as_deref())
             }
@@ -129,13 +129,13 @@ impl App {
         }
     }
 
-    /// Spec 2: skip while paused, concealed, or from an ignored app; classify off the main
-    /// thread, one capture at a time; then insert in copy order.
-    pub fn capture(&self, offer: MimeMap, concealed: bool) {
+    /// Spec 2: skip while paused or from an ignored app; classify off the main thread, one
+    /// capture at a time, which skips concealed offers; then insert in copy order.
+    pub fn capture(&self, offer: MimeMap) {
         let source = self.services.source_app();
         {
             let prefs = self.prefs.borrow();
-            if concealed || prefs.capture_paused || prefs.is_ignored(source.as_ref()) {
+            if prefs.capture_paused || prefs.is_ignored(source.as_ref()) {
                 return;
             }
         }

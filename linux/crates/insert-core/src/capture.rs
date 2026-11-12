@@ -710,9 +710,12 @@ mod tests {
             Err(Skip::Concealed)
         );
         assert_eq!(
-            kind(&[(UTF8_TEXT, b"note"), (KDE_PASSWORD_HINT, b"other")]),
-            Ok(ClipKind::Text)
+            kind(&[(UTF8_TEXT, b"hunter2"), (KDE_PASSWORD_HINT, b"secret\n")]),
+            Err(Skip::Concealed)
         );
+        let note = classify(offer(&[(UTF8_TEXT, b"note"), (KDE_PASSWORD_HINT, b"other")])).unwrap();
+        assert_eq!(note.content.kind(), ClipKind::Text);
+        assert_eq!(note.payload, offer(&[(UTF8_TEXT, b"note")]));
     }
 
     #[test]

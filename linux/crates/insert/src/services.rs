@@ -63,9 +63,9 @@ pub struct StatusIcon {
 #[derive(Clone, Debug)]
 pub enum ServiceEvent {
     /// The clipboard has new content from another app. The platform never reports content that
-    /// Insert wrote with `set_clipboard`. `concealed` is true when the offer carried a password
-    /// manager marker.
-    ClipboardChanged { offer: MimeMap, concealed: bool },
+    /// Insert wrote with `set_clipboard`. The offer can have a password manager marker, which
+    /// `classify` checks.
+    ClipboardChanged { offer: MimeMap },
     /// The global shortcut fired. Present the tray with the token so the compositor focuses it.
     ShortcutActivated { activation_token: Option<String> },
     ShortcutChanged(Shortcut),
@@ -342,8 +342,8 @@ impl Inner {
     async fn forward_clipboard(self: Rc<Self>, changes: async_channel::Receiver<ClipboardEvent>) {
         while let Ok(change) = changes.recv().await {
             match change {
-                ClipboardEvent::Changed { mimes, concealed } => {
-                    self.emit(ServiceEvent::ClipboardChanged { offer: MimeMap(mimes), concealed });
+                ClipboardEvent::Changed { mimes } => {
+                    self.emit(ServiceEvent::ClipboardChanged { offer: MimeMap(mimes) });
                 }
                 ClipboardEvent::Unavailable { reason } => {
                     eprintln!("insert: clipboard capture is not available: {reason}");

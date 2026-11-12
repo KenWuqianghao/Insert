@@ -18,8 +18,8 @@ fn main() {
     }
     while let Ok(event) = receiver.recv_blocking() {
         match event {
-            ClipboardEvent::Changed { mimes, concealed } => {
-                println!("changed concealed={concealed}");
+            ClipboardEvent::Changed { mimes } => {
+                println!("changed");
                 for (mime, data) in mimes {
                     let preview = String::from_utf8_lossy(&data[..data.len().min(40)]).into_owned();
                     println!("  {mime} {} bytes {preview:?}", data.len());
