@@ -7,7 +7,7 @@ use std::time::Duration;
 use gtk4 as gtk;
 use gtk::{gio, glib, prelude::*};
 use insert_core::{
-    classify, Change, HistoryLimit, Library, MimeMap, Paths, Preferences, SourceApp, Storage,
+    classify, Capture, Change, HistoryLimit, Library, MimeMap, Paths, Preferences, Skip, SourceApp, Storage,
 };
 use time::OffsetDateTime;
 
@@ -27,6 +27,8 @@ pub struct App {
     paths: Paths,
     pub tray: Tray,
     settings: RefCell<Option<Rc<SettingsWindow>>>,
+    /// Captures that wait for `classify`, in copy order.
+    captures: async_channel::Sender<(MimeMap, Option<SourceApp>)>,
     save_timer: RefCell<Option<glib::SourceId>>,
     /// The index did not parse at startup. The tray says so until the user dismisses it.
     pub library_notice: Cell<bool>,
@@ -49,6 +51,7 @@ impl App {
             eprintln!("insert: index.json did not parse; moved to {}", backup.display());
         }
 
+        let (captures, queued_captures) = async_channel::unbounded();
         let app = Rc::new_cyclic(|weak| App {
             gtk_app: gtk_app.clone(),
             paste_status: Cell::new(services.paste_status()),
@@ -59,6 +62,7 @@ impl App {
             paths,
             tray: Tray::new(weak, gtk_app),
             settings: RefCell::new(None),
+            captures,
             save_timer: RefCell::new(None),
             library_notice: Cell::new(opened.corrupt_backup.is_some()),
             capture_notice: Cell::new(false),
@@ -66,6 +70,16 @@ impl App {
         app.install_tray_actions();
         app.update_status_icon();
 
+        let weak = Rc::downgrade(&app);
+        glib::spawn_future_local(async move {
+            while let Ok((offer, source)) = queued_captures.recv().await {
+                let Ok(classified) = gio::spawn_blocking(move || classify(offer)).await else {
+                    continue;
+                };
+                let Some(app) = weak.upgrade() else { break };
+                app.insert_capture(classified, source);
+            }
+        });
         let weak = Rc::downgrade(&app);
         glib::spawn_future_local(async move {
             while let Ok(event) = events.recv().await {
@@ -116,8 +130,8 @@ impl App {
     }
 
     /// Spec 2: skip while paused, concealed, or from an ignored app; classify off the main
-    /// thread; then insert.
-    pub fn capture(self: &Rc<Self>, offer: MimeMap, concealed: bool) {
+    /// thread, one capture at a time; then insert in copy order.
+    pub fn capture(&self, offer: MimeMap, concealed: bool) {
         let source = self.services.source_app();
         {
             let prefs = self.prefs.borrow();
@@ -125,31 +139,29 @@ impl App {
                 return;
             }
         }
-        let weak = Rc::downgrade(self);
-        glib::spawn_future_local(async move {
-            let Ok(classified) = gio::spawn_blocking(move || classify(offer)).await else {
-                return;
-            };
-            let Some(app) = weak.upgrade() else { return };
-            let capture = match classified {
-                Ok(capture) => capture,
-                Err(skip) => {
-                    eprintln!("insert: clipboard not saved: {skip:?}");
-                    return;
-                }
-            };
-            if app.prefs.borrow().capture_paused {
+        // The receiver lives as long as the app.
+        let _ = self.captures.try_send((offer, source));
+    }
+
+    fn insert_capture(self: &Rc<Self>, classified: Result<Capture, Skip>, source: Option<SourceApp>) {
+        let capture = match classified {
+            Ok(capture) => capture,
+            Err(skip) => {
+                eprintln!("insert: clipboard not saved: {skip:?}");
                 return;
             }
-            let inserted = app
-                .library
-                .borrow_mut()
-                .insert(capture, source, OffsetDateTime::now_utc());
-            match inserted {
-                Ok(change) => app.apply(change),
-                Err(error) => eprintln!("insert: cannot save the clip: {error}"),
-            }
-        });
+        };
+        if self.prefs.borrow().capture_paused {
+            return;
+        }
+        let inserted = self
+            .library
+            .borrow_mut()
+            .insert(capture, source, OffsetDateTime::now_utc());
+        match inserted {
+            Ok(change) => self.apply(change),
+            Err(error) => eprintln!("insert: cannot save the clip: {error}"),
+        }
     }
 
     /// Shows a library change everywhere and saves it soon.
