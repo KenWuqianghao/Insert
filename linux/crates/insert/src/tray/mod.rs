@@ -96,6 +96,7 @@ pub struct Tray {
     prompt_revealer: gtk::Revealer,
     prompt_title: gtk::Label,
     prompt_entry: gtk::Entry,
+    /// The cards that a row shows now.
     cards: RefCell<HashMap<ClipId, Card>>,
     /// The list row that shows each bound card now.
     bound: RefCell<HashMap<ClipId, glib::WeakRef<gtk::ListItem>>>,
@@ -751,13 +752,22 @@ impl Tray {
         item.set_child(Some(&root));
     }
 
+    /// A card lives while a row shows it. The list view binds only the rows near the visible
+    /// part of the strip, so the cards and their textures stay few.
     fn unbind_card(&self, item: &gtk::ListItem) {
         let Some(id) = item_clip_id(item) else { return };
-        let mut bound = self.bound.borrow_mut();
-        if bound.get(&id).and_then(|weak| weak.upgrade()).as_ref() == Some(item) {
-            bound.remove(&id);
-        }
+        let shown_here = {
+            let mut bound = self.bound.borrow_mut();
+            let shown_here = bound.get(&id).and_then(|weak| weak.upgrade()).as_ref() == Some(item);
+            if shown_here {
+                bound.remove(&id);
+            }
+            shown_here
+        };
         item.set_child(gtk::Widget::NONE);
+        if shown_here {
+            self.cards.borrow_mut().remove(&id);
+        }
     }
 
     pub fn popup_menu(&self, model: &gio::Menu, from: &impl IsA<gtk::Widget>, x: f64, y: f64) {
