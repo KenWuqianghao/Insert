@@ -13,13 +13,14 @@ use std::rc::Weak;
 
 use gtk4 as gtk;
 use gtk::{gdk, gio, glib, prelude::*};
-use insert_core::{empty_state, ClipId, Key, Library, PinboardId, Scope};
+use insert_core::{empty_state, ClipId, Library, PinboardId, Scope};
 use time::OffsetDateTime;
 
 use crate::app::App;
 use crate::with_app;
 use crate::theme::{appearance, background_class, icon};
 use card::{set_class, Card, Ring};
+#[cfg(feature = "test-hooks")]
 pub use keys::parse_test_key;
 use model::{TrayModel, TrayState};
 
@@ -462,6 +463,7 @@ impl Tray {
         };
     }
 
+    #[cfg(feature = "test-hooks")]
     /// Test hook: types into the focused text field, as the keyboard would.
     pub fn type_text(&self, text: &str) {
         if let Some(editable) = self.focused_editable() {
@@ -471,22 +473,24 @@ impl Tray {
         }
     }
 
+    #[cfg(feature = "test-hooks")]
     /// Test hook: what the focused field does with a key that ran no command.
-    pub fn edit_field(&self, key: Key) {
+    pub fn edit_field(&self, key: insert_core::Key) {
         let Some(editable) = self.focused_editable() else { return };
         match key {
-            Key::Backspace => {
+            insert_core::Key::Backspace => {
                 let position = editable.position();
                 if position > 0 {
                     editable.delete_text(position - 1, position);
                 }
             }
-            Key::Space => self.type_text(" "),
-            Key::Return => editable.emit_by_name::<()>("activate", &[]),
+            insert_core::Key::Space => self.type_text(" "),
+            insert_core::Key::Return => editable.emit_by_name::<()>("activate", &[]),
             _ => {}
         }
     }
 
+    #[cfg(feature = "test-hooks")]
     fn focused_editable(&self) -> Option<gtk::Editable> {
         GtkWindowExt::focus(&self.window).and_downcast::<gtk::Editable>()
     }
@@ -504,6 +508,7 @@ impl Tray {
         }
     }
 
+    #[cfg(feature = "test-hooks")]
     pub fn popup_filter_menu(&self) {
         self.filter_button.popup();
     }

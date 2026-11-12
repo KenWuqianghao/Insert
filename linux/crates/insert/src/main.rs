@@ -2,6 +2,8 @@ mod app;
 mod appicon;
 mod services;
 mod settings;
+#[cfg(feature = "test-hooks")]
+mod test_hooks;
 mod theme;
 mod tray;
 
@@ -12,10 +14,8 @@ use async_signal::Signal;
 use futures_lite::StreamExt as _;
 use gtk4 as gtk;
 use gtk::{gio, glib, prelude::*};
-use insert_core::MimeMap;
 
 use app::App;
-use services::ServiceEvent;
 
 /// A signal handler that holds the app weakly. `with_app!(weak => app, |args| body)` binds the
 /// live `&Rc<App>` to `app` in the body. When the app is gone, the handler returns the default
@@ -60,8 +60,9 @@ fn main() -> glib::ExitCode {
             theme::install(&gtk::gdk::Display::default().expect("a display"));
             let app = App::start(gtk_app);
             install_app_actions(&app);
+            #[cfg(feature = "test-hooks")]
             if std::env::var_os("INSERT_TEST_HOOKS").is_some_and(|v| v == "1") {
-                install_test_hooks(&app);
+                test_hooks::install(&app);
             }
             std::mem::forget(gtk_app.hold());
             quit_on_signals(&app);
@@ -133,83 +134,4 @@ fn install_app_actions(app: &Rc<App>) {
     add("quit", |app| app.quit());
     app.gtk_app
         .set_accels_for_action("app.settings", &["<Control>comma"]);
-}
-
-/// Verification only. `test-key` feeds the tray key path, `test-capture` the capture pipeline,
-/// and `test-action` runs a window action such as "tray.new-pinboard" or "settings.pane|privacy",
-/// or "clip-menu" and "filter-menu" to open those menus.
-fn install_test_hooks(app: &Rc<App>) {
-    let weak = Rc::downgrade(app);
-    let key = gio::SimpleAction::new("test-key", Some(glib::VariantTy::STRING));
-    key.connect_activate(with_app!(&weak => app, |_, param| {
-        let Some(spec) = param.and_then(|p| p.str()) else { return };
-        match spec {
-            "ctrl-down" => app.set_ctrl_held(true),
-            "ctrl-up" => app.set_ctrl_held(false),
-            _ => match spec.strip_prefix("type:") {
-                Some(text) => app.tray.type_text(text),
-                None => match tray::parse_test_key(spec) {
-                    Some((key, mods)) if !app.handle_key(key, mods) => app.tray.edit_field(key),
-                    Some(_) => {}
-                    None => eprintln!("insert: test-key: unknown key {spec}"),
-                },
-            },
-        }
-    }));
-    app.gtk_app.add_action(&key);
-
-    let capture = gio::SimpleAction::new("test-capture", Some(glib::VariantTy::STRING));
-    capture.connect_activate(with_app!(&weak => app, |_, param| {
-        let Some(spec) = param.and_then(|p| p.str()) else { return };
-        let offer = if let Some(path) = spec.strip_prefix("file:") {
-            MimeMap(vec![(
-                "text/uri-list".to_owned(),
-                format!("file://{path}\r\n").into_bytes(),
-            )])
-        } else if let Some(path) = spec.strip_prefix("image:") {
-            match std::fs::read(path) {
-                Ok(bytes) => MimeMap(vec![("image/png".to_owned(), bytes)]),
-                Err(error) => {
-                    eprintln!("insert: test-capture: {error}");
-                    return;
-                }
-            }
-        } else {
-            MimeMap::from_plain_text(spec)
-        };
-        app.on_service_event(ServiceEvent::ClipboardChanged { offer });
-    }));
-    app.gtk_app.add_action(&capture);
-
-    let action = gio::SimpleAction::new("test-action", Some(glib::VariantTy::STRING));
-    action.connect_activate(with_app!(&weak => app, |_, param| {
-        let Some(spec) = param.and_then(|p| p.str()) else { return };
-        if spec == "clip-menu" {
-            let primary = app.tray.model.borrow().selection.primary();
-            if let Some((id, card)) = primary.and_then(|id| Some((id, app.tray.card_widget(id)?))) {
-                app.open_clip_menu(id, card.upcast_ref(), 120.0, 120.0);
-            }
-            return;
-        }
-        if spec == "filter-menu" {
-            app.tray.popup_filter_menu();
-            return;
-        }
-        let (name, target) = match spec.split_once('|') {
-            Some((name, target)) => (name, Some(target.to_variant())),
-            None => (spec, None),
-        };
-        let window: gtk::Window = if name.starts_with("settings.") {
-            match app.gtk_app.windows().into_iter().find(|w| w.has_css_class("settings")) {
-                Some(window) => window,
-                None => return,
-            }
-        } else {
-            app.tray.window.clone().upcast()
-        };
-        if let Err(error) = window.activate_action(name, target.as_ref()) {
-            eprintln!("insert: test-action: {error}");
-        }
-    }));
-    app.gtk_app.add_action(&action);
 }

@@ -68,6 +68,7 @@ fn shortcut_char(typed: char, [plain, shifted]: [Option<char>; 2]) -> char {
     plain.filter(char::is_ascii_graphic).unwrap_or(typed)
 }
 
+#[cfg(feature = "test-hooks")]
 /// A key for the `test-key` hook, written like "Down", "ctrl+1", "shift+Return", or "space".
 pub fn parse_test_key(spec: &str) -> Option<(Key, Modifiers)> {
     let mut modifiers = Modifiers::NONE;

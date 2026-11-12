@@ -14,5 +14,9 @@ insert-platform = { path = "../insert-platform" }
 time = "0.3.55"
 uuid = "1.29.2"
 
+[features]
+# Actions for the nested-KWin tests. Release builds leave them out.
+test-hooks = []
+
 [dev-dependencies]
 tempfile = "3.27.0"
