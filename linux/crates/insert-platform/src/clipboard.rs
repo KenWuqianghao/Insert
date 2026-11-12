@@ -7,6 +7,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io::{Read as _, Write as _};
 use std::os::fd::{AsFd, OwnedFd};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread::JoinHandle;
@@ -121,11 +122,15 @@ impl ClipboardWatcher {
     }
 
     fn request(&self, command: impl FnOnce(Done) -> Command) -> Result<(), ClipboardError> {
-        let (done, done_rx) = mpsc::sync_channel(1);
-        self.send(command(done))?;
-        match done_rx.recv_timeout(SET_TIMEOUT) {
+        let (result, result_rx) = mpsc::sync_channel(1);
+        let abandoned = Arc::new(AtomicBool::new(false));
+        self.send(command(Done { result, abandoned: Arc::clone(&abandoned) }))?;
+        match result_rx.recv_timeout(SET_TIMEOUT) {
             Ok(result) => result.map_err(ClipboardError::Wayland),
-            Err(mpsc::RecvTimeoutError::Timeout) => Err(ClipboardError::Timeout),
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                abandoned.store(true, Ordering::Release);
+                Err(ClipboardError::Timeout)
+            }
             Err(mpsc::RecvTimeoutError::Disconnected) => Err(ClipboardError::NotRunning),
         }
     }
@@ -147,7 +152,22 @@ impl Drop for ClipboardWatcher {
     }
 }
 
-type Done = mpsc::SyncSender<Result<(), String>>;
+/// The reply to a command. A caller that timed out returned `Timeout` and does not wait any more.
+/// Its command must then not run, because the caller can have set newer content since.
+struct Done {
+    result: mpsc::SyncSender<Result<(), String>>,
+    abandoned: Arc<AtomicBool>,
+}
+
+impl Done {
+    fn is_abandoned(&self) -> bool {
+        self.abandoned.load(Ordering::Acquire)
+    }
+
+    fn send(self, result: Result<(), String>) {
+        let _ = self.result.send(result);
+    }
+}
 
 enum Command {
     Set { mimes: MimeData, done: Done },
@@ -534,12 +554,13 @@ fn run(
             while let Ok(command) = commands.try_recv() {
                 match command {
                     Command::Stop => return Ok(()),
+                    Command::Set { done, .. } | Command::MirrorToPrimary { done } if done.is_abandoned() => {}
                     Command::Set { mimes, done } => {
                         let result = set_selection(&mut state, &mut queue, &manager, &device, mimes);
-                        let _ = done.send(result.map_err(|error| wayland_error(&error)));
+                        done.send(result.map_err(|error| wayland_error(&error)));
                     }
                     Command::MirrorToPrimary { done } => {
-                        let _ = done.send(mirror_to_primary(&mut state, &mut queue, &manager, &device));
+                        done.send(mirror_to_primary(&mut state, &mut queue, &manager, &device));
                     }
                 }
             }
