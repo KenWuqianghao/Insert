@@ -127,29 +127,23 @@ impl PasteInjector {
             .await
             .and_then(|request| request.response())
             .map_err(unavailable)?;
-        let started = portal
-            .start(&session, None, Default::default())
-            .await
-            .and_then(|request| request.response())
-            .map_err(|error| match error {
-                ashpd::Error::Response(ResponseError::Cancelled) => PasteError::NeedsPermission,
-                other => unavailable(other),
-            })?;
-        if !started.devices().contains(DeviceType::KEYBOARD) {
-            let _ = session.close().await;
-            return Err(PasteError::NeedsPermission);
-        }
-
-        // A restore token is valid for one session only. The portal gives the next one here.
-        if let Some(path) = token_file {
-            let stored = match started.restore_token() {
-                Some(token) => write_private(&path, token),
-                None => remove_if_present(&path),
-            };
-            if let Err(error) = stored {
-                log::warn!("cannot store the portal restore token at {}: {error}", path.display());
+        let started = portal.start(&session, None, Default::default()).await.and_then(|request| request.response());
+        // A refused token must go. Else the dialog comes back at each start.
+        let started = match started {
+            Ok(started) if started.devices().contains(DeviceType::KEYBOARD) => started,
+            Ok(_) => {
+                let _ = session.close().await;
+                store_token(token_file.as_deref(), None);
+                return Err(PasteError::NeedsPermission);
             }
-        }
+            Err(ashpd::Error::Response(ResponseError::Cancelled)) => {
+                store_token(token_file.as_deref(), None);
+                return Err(PasteError::NeedsPermission);
+            }
+            Err(other) => return Err(unavailable(other)),
+        };
+        // A restore token is valid for one session only. The portal gives the next one here.
+        store_token(token_file.as_deref(), started.restore_token());
         Ok(Self { portal, session })
     }
 
@@ -189,6 +183,18 @@ fn restore_token_file() -> Option<PathBuf> {
         .filter(|path| path.is_absolute())
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/state")))?;
     Some(state_home.join("insert").join("remote-desktop-token"))
+}
+
+/// Writes `token` to `path`, or removes the file when there is no token.
+fn store_token(path: Option<&std::path::Path>, token: Option<&str>) {
+    let Some(path) = path else { return };
+    let stored = match token {
+        Some(token) => write_private(path, token),
+        None => remove_if_present(path),
+    };
+    if let Err(error) = stored {
+        log::warn!("cannot store the portal restore token at {}: {error}", path.display());
+    }
 }
 
 fn write_private(path: &std::path::Path, content: &str) -> io::Result<()> {
