@@ -205,7 +205,10 @@ impl App {
             (PasteAction::PastePlainText, Some(text)) => MimeMap::from_plain_text(&text),
             _ => payload.for_clipboard(),
         };
-        self.services.set_clipboard(offer);
+        let copied = self.services.set_clipboard(offer);
+        if let Err(error) = &copied {
+            eprintln!("insert: cannot set the clipboard: {error}");
+        }
         let app = Rc::downgrade(self);
         self.hide_tray(Some(Box::new(move || {
             let Some(app) = app.upgrade() else { return };
@@ -214,7 +217,8 @@ impl App {
                 .borrow_mut()
                 .move_to_front(id, OffsetDateTime::now_utc());
             app.apply(change);
-            let paste = action != PasteAction::Copy
+            let paste = copied.is_ok()
+                && action != PasteAction::Copy
                 && app.prefs.borrow().paste_directly
                 && app.services.paste_status() == PasteStatus::Ready;
             if paste {

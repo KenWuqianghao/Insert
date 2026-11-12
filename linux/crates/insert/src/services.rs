@@ -147,12 +147,10 @@ impl Services {
         }
     }
 
-    pub fn set_clipboard(&self, offer: MimeMap) {
+    /// The error text is for the log.
+    pub fn set_clipboard(&self, offer: MimeMap) -> Result<(), String> {
         if let Some(watcher) = &*self.inner.watcher.borrow() {
-            if let Err(error) = watcher.set_clipboard(offer.0) {
-                eprintln!("insert: cannot set the clipboard: {error}");
-            }
-            return;
+            return watcher.set_clipboard(offer.0).map_err(|error| error.to_string());
         }
         let providers: Vec<gdk::ContentProvider> = offer
             .0
@@ -162,7 +160,7 @@ impl Services {
         self.inner
             .gdk_clipboard
             .set_content(Some(&gdk::ContentProvider::new_union(&providers)))
-            .unwrap_or_else(|error| eprintln!("insert: cannot set the clipboard: {error}"));
+            .map_err(|error| error.to_string())
     }
 
     /// Sends the paste keys to the app that gets the focus when the tray is gone. Call it after
