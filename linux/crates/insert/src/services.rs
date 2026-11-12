@@ -58,6 +58,9 @@ struct Inner {
     events: async_channel::Sender<ServiceEvent>,
     watcher: RefCell<Option<ClipboardWatcher>>,
     gdk_clipboard: gdk::Clipboard,
+    gdk_primary: gdk::Clipboard,
+    /// The result of the last primary selection write when there is no watcher.
+    gdk_primary_written: RefCell<Result<(), String>>,
     injector: RefCell<Option<Rc<PasteInjector>>>,
     restore_token_file: PathBuf,
     paste_status: Cell<PasteStatus>,
@@ -86,6 +89,8 @@ impl Services {
             events,
             watcher: RefCell::new(watcher),
             gdk_clipboard: display.clipboard(),
+            gdk_primary: display.primary_clipboard(),
+            gdk_primary_written: RefCell::new(Err("Insert has not set it".to_owned())),
             injector: RefCell::new(None),
             restore_token_file: paths.restore_token_file(),
             paste_status: Cell::new(PasteStatus::NeedsPermission),
@@ -132,10 +137,11 @@ impl Services {
             .into_iter()
             .map(|(mime, data)| gdk::ContentProvider::for_bytes(&mime, &glib::Bytes::from_owned(data)))
             .collect();
-        self.inner
-            .gdk_clipboard
-            .set_content(Some(&gdk::ContentProvider::new_union(&providers)))
-            .map_err(|error| error.to_string())
+        let provider = gdk::ContentProvider::new_union(&providers);
+        // A terminal pastes the primary selection on Shift+Insert.
+        let primary = self.inner.gdk_primary.set_content(Some(&provider)).map_err(|error| error.to_string());
+        *self.inner.gdk_primary_written.borrow_mut() = primary;
+        self.inner.gdk_clipboard.set_content(Some(&provider)).map_err(|error| error.to_string())
     }
 
     pub fn paste_into_front_app(&self) {
@@ -163,7 +169,7 @@ impl Services {
             if keys == PasteKeys::ShiftInsert {
                 let mirrored = match &*inner.watcher.borrow() {
                     Some(watcher) => watcher.mirror_to_primary().map_err(|error| error.to_string()),
-                    None => Err("this desktop does not let Insert set it".to_owned()),
+                    None => inner.gdk_primary_written.borrow().clone(),
                 };
                 if let Err(error) = mirrored {
                     eprintln!("insert: cannot set the primary selection: {error}; the clip is only copied");
