@@ -193,8 +193,9 @@ impl Library {
         self.update(|clips| trim(clips, limit))
     }
 
-    /// A clip with the same content hash moves to the front with the new time and source, and
-    /// keeps its title and pinboard. Else the payload is written and a new clip is inserted.
+    /// A clip with the same content hash takes the new payload, which can differ in volatile
+    /// entries. It moves to the front with the new time and source, and keeps its title and
+    /// pinboard. Else the payload is written and a new clip is inserted.
     pub fn insert(
         &mut self,
         capture: Capture,
@@ -208,8 +209,11 @@ impl Library {
             .find(|clip| clip.content_hash == capture.content_hash)
         {
             let id = existing.id;
+            self.storage
+                .write_clip(id, &capture.payload, capture.thumbnail_png.as_deref())?;
             return Ok(self.update(|clips| {
                 move_to_front(clips, id, now, |clip| {
+                    clip.byte_count = capture.byte_count;
                     if source.is_some() {
                         clip.source = source;
                     }
@@ -464,6 +468,8 @@ mod tests {
     use crate::mime::UTF8_TEXT;
     use time::Duration;
 
+    const WEB_CUSTOM_DATA: &str = "chromium/x-web-custom-data";
+
     struct Fixture {
         _dir: tempfile::TempDir,
         storage: Storage,
@@ -547,6 +553,28 @@ mod tests {
 
         let _ = library.insert(text("same"), None, t(95)).unwrap();
         assert_eq!(library.clips()[0].source, app("Firefox"));
+    }
+
+    #[test]
+    fn duplicate_takes_the_volatile_entries_of_the_new_capture() {
+        let Fixture { mut library, .. } = fixture(HistoryLimit::Clips100);
+        let capture = |custom: &[u8]| {
+            classify(MimeMap(vec![
+                (UTF8_TEXT.into(), b"same".to_vec()),
+                (WEB_CUSTOM_DATA.into(), custom.to_vec()),
+            ]))
+            .unwrap()
+        };
+        let _ = library.insert(capture(b"old"), None, t(0)).unwrap();
+        let id = library.clips()[0].id;
+
+        let _ = library.insert(capture(b"newer"), None, t(5)).unwrap();
+        assert_eq!(library.clips().len(), 1);
+        assert_eq!(
+            library.payload(id).unwrap().get(WEB_CUSTOM_DATA),
+            Some(b"newer".as_slice())
+        );
+        assert_eq!(library.clips()[0].byte_count, 9);
     }
 
     #[test]

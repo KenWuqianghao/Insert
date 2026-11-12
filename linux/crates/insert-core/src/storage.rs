@@ -142,16 +142,21 @@ impl Storage {
         write_private_atomic(&self.index_path(), &json)
     }
 
-    /// Writes the payload directory and the thumbnail. On failure, nothing is left behind.
+    /// Writes the payload directory and the thumbnail, and replaces the files that the clip has.
+    /// On failure, a new clip leaves nothing behind and a clip with files keeps its old payload.
     pub fn write_clip(
         &self,
         id: ClipId,
         payload: &MimeMap,
         thumbnail_png: Option<&[u8]>,
     ) -> io::Result<()> {
+        let is_new = !self.has_payload(id);
         let result = self.try_write_clip(id, payload, thumbnail_png);
         if result.is_err() {
-            self.remove_files(id);
+            let _ = fs::remove_dir_all(self.payloads_dir().join(format!(".{id}.partial")));
+            if is_new {
+                self.remove_files(id);
+            }
         }
         result
     }
@@ -165,8 +170,11 @@ impl Storage {
         create_private_dir(&self.root)?;
         create_private_dir(&self.payloads_dir())?;
         let partial = self.payloads_dir().join(format!(".{id}.partial"));
-        if partial.exists() {
-            fs::remove_dir_all(&partial)?;
+        let old = self.payloads_dir().join(format!(".{id}.old"));
+        for stale in [&partial, &old] {
+            if stale.exists() {
+                fs::remove_dir_all(stale)?;
+            }
         }
         create_private_dir(&partial)?;
         for (mime, data) in &payload.0 {
@@ -175,10 +183,19 @@ impl Storage {
             file.sync_all()?;
         }
         let final_dir = self.payload_dir(id);
-        if final_dir.exists() {
-            fs::remove_dir_all(&final_dir)?;
+        let replacing = final_dir.exists();
+        if replacing {
+            fs::rename(&final_dir, &old)?;
         }
-        fs::rename(&partial, &final_dir)?;
+        if let Err(error) = fs::rename(&partial, &final_dir) {
+            if replacing {
+                let _ = fs::rename(&old, &final_dir);
+            }
+            return Err(error);
+        }
+        if replacing {
+            let _ = fs::remove_dir_all(&old);
+        }
         if let Some(png) = thumbnail_png {
             write_private_atomic(&self.thumbnail_path(id), png)?;
         }
