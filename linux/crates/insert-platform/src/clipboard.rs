@@ -61,8 +61,8 @@ pub enum DataControlProtocol {
 }
 
 pub struct ClipboardConfig {
-    /// The watcher reads only the MIME types for which this returns true.
-    pub accept_mime: Box<dyn Fn(&str) -> bool + Send>,
+    /// Gets the MIME types of an offer and returns the ones that the watcher must read.
+    pub select_mimes: Box<dyn Fn(&[String]) -> Vec<String> + Send>,
     /// A clipboard change with more accepted bytes than this gives no event.
     pub max_total_bytes: usize,
     pub protocol: DataControlProtocol,
@@ -71,7 +71,7 @@ pub struct ClipboardConfig {
 impl Default for ClipboardConfig {
     fn default() -> Self {
         Self {
-            accept_mime: Box::new(|_| true),
+            select_mimes: Box::new(|mimes| mimes.to_vec()),
             max_total_bytes: DEFAULT_MAX_TOTAL_BYTES,
             protocol: DataControlProtocol::Auto,
         }
@@ -112,8 +112,18 @@ impl ClipboardWatcher {
     /// Returns after the compositor has the new selection. An empty list clears the clipboard.
     /// The watcher gives no `Changed` event for this write.
     pub fn set_clipboard(&self, mimes: MimeData) -> Result<(), ClipboardError> {
+        self.request(|done| Command::Set { mimes, done })
+    }
+
+    /// Offers the content of the last `set_clipboard` as the primary selection too. Most terminals paste the
+    /// primary selection on Shift+Insert.
+    pub fn mirror_to_primary(&self) -> Result<(), ClipboardError> {
+        self.request(|done| Command::MirrorToPrimary { done })
+    }
+
+    fn request(&self, command: impl FnOnce(Done) -> Command) -> Result<(), ClipboardError> {
         let (done, done_rx) = mpsc::sync_channel(1);
-        self.send(Command::Set { mimes, done })?;
+        self.send(command(done))?;
         match done_rx.recv_timeout(SET_TIMEOUT) {
             Ok(result) => result.map_err(ClipboardError::Wayland),
             Err(mpsc::RecvTimeoutError::Timeout) => Err(ClipboardError::Timeout),
@@ -138,8 +148,11 @@ impl Drop for ClipboardWatcher {
     }
 }
 
+type Done = mpsc::SyncSender<Result<(), String>>;
+
 enum Command {
-    Set { mimes: MimeData, done: mpsc::SyncSender<Result<(), String>> },
+    Set { mimes: MimeData, done: Done },
+    MirrorToPrimary { done: Done },
     Stop,
 }
 
@@ -187,6 +200,26 @@ impl Device {
             (Self::Ext(device), None) => device.set_selection(None),
             (Self::Wlr(device), None) => device.set_selection(None),
             (Self::Ext(_), Some(Source::Wlr(_))) | (Self::Wlr(_), Some(Source::Ext(_))) => {
+                unreachable!("a source comes from the manager of its device")
+            }
+        }
+    }
+}
+
+impl Device {
+    /// `zwlr-data-control` has the primary selection from version 2.
+    fn has_primary_selection(&self) -> bool {
+        match self {
+            Self::Ext(_) => true,
+            Self::Wlr(device) => device.version() >= 2,
+        }
+    }
+
+    fn set_primary_selection(&self, source: &Source) {
+        match (self, source) {
+            (Self::Ext(device), Source::Ext(source)) => device.set_primary_selection(Some(source)),
+            (Self::Wlr(device), Source::Wlr(source)) => device.set_primary_selection(Some(source)),
+            (Self::Ext(_), Source::Wlr(_)) | (Self::Wlr(_), Source::Ext(_)) => {
                 unreachable!("a source comes from the manager of its device")
             }
         }
@@ -260,11 +293,12 @@ struct OwnedSelection {
 struct State {
     connection: Connection,
     events: async_channel::Sender<ClipboardEvent>,
-    accept_mime: Box<dyn Fn(&str) -> bool + Send>,
+    select_mimes: Box<dyn Fn(&[String]) -> Vec<String> + Send>,
     max_total_bytes: usize,
     announced: HashMap<ObjectId, AnnouncedOffer>,
     transfer: Option<Transfer>,
     owned: Option<OwnedSelection>,
+    owned_primary: Option<OwnedSelection>,
     /// True until the first roundtrip ends, so the clipboard content at start gives no event.
     starting: bool,
     stop: Option<Result<(), String>>,
@@ -304,9 +338,11 @@ impl State {
         if mimes.iter().any(|mime| mime == CONCEALED_MIME) {
             queue.push_back(CONCEALED_MIME.to_owned());
         }
-        queue.extend(mimes.into_iter().filter(|mime| {
-            mime != CONCEALED_MIME && !X11_META_TARGETS.contains(&mime.as_str()) && (self.accept_mime)(mime)
-        }));
+        queue.extend(
+            (self.select_mimes)(&mimes)
+                .into_iter()
+                .filter(|mime| mime != CONCEALED_MIME && !X11_META_TARGETS.contains(&mime.as_str())),
+        );
         self.transfer = Some(Transfer { offer, queue, collected: Vec::new(), total: 0, current: None });
         self.start_next_read();
     }
@@ -388,7 +424,8 @@ impl State {
     }
 
     fn source_send(&mut self, source: &ObjectId, mime: String, fd: OwnedFd) {
-        let Some(owned) = self.owned.as_ref().filter(|owned| &owned.source.id() == source) else { return };
+        let mut selections = self.owned.iter().chain(&self.owned_primary);
+        let Some(owned) = selections.find(|owned| &owned.source.id() == source) else { return };
         let data = Arc::clone(&owned.data);
         // A slow reader must not stop the event loop.
         std::thread::spawn(move || {
@@ -399,8 +436,10 @@ impl State {
     }
 
     fn source_cancelled(&mut self, source: &ObjectId) {
-        if let Some(owned) = self.owned.take_if(|owned| &owned.source.id() == source) {
-            owned.source.destroy();
+        for selection in [&mut self.owned, &mut self.owned_primary] {
+            if let Some(owned) = selection.take_if(|owned| &owned.source.id() == source) {
+                owned.source.destroy();
+            }
         }
     }
 
@@ -436,11 +475,12 @@ fn run(
     let mut state = State {
         connection: connection.clone(),
         events: events.clone(),
-        accept_mime: config.accept_mime,
+        select_mimes: config.select_mimes,
         max_total_bytes: config.max_total_bytes,
         announced: HashMap::new(),
         transfer: None,
         owned: None,
+        owned_primary: None,
         starting: true,
         stop: None,
     };
@@ -507,6 +547,9 @@ fn run(
                         let result = set_selection(&mut state, &mut queue, &manager, &device, mimes);
                         let _ = done.send(result.map_err(|error| wayland_error(&error)));
                     }
+                    Command::MirrorToPrimary { done } => {
+                        let _ = done.send(mirror_to_primary(&mut state, &mut queue, &manager, &device));
+                    }
                 }
             }
         }
@@ -537,6 +580,30 @@ fn set_selection(
         previous.source.destroy();
     }
     queue.roundtrip(state).map(|_| ())
+}
+
+fn mirror_to_primary(
+    state: &mut State,
+    queue: &mut EventQueue<State>,
+    manager: &Manager,
+    device: &Device,
+) -> Result<(), String> {
+    if !device.has_primary_selection() {
+        return Err("the compositor has no primary selection".into());
+    }
+    let Some(clipboard) = &state.owned else {
+        return Err("Insert does not own the clipboard".into());
+    };
+    let data = Arc::clone(&clipboard.data);
+    let source = manager.source(&queue.handle());
+    for mime in data.keys() {
+        source.offer(mime);
+    }
+    device.set_primary_selection(&source);
+    if let Some(previous) = state.owned_primary.replace(OwnedSelection { source, data }) {
+        previous.source.destroy();
+    }
+    queue.roundtrip(state).map(|_| ()).map_err(|error| format!("the Wayland connection failed: {error}"))
 }
 
 impl Dispatch<WlRegistry, GlobalListContents> for State {
