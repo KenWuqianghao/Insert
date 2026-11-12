@@ -8,6 +8,8 @@ mod tray;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use async_signal::Signal;
+use futures_lite::StreamExt as _;
 use gtk4 as gtk;
 use gtk::{gio, glib, prelude::*};
 use insert_core::MimeMap;
@@ -62,6 +64,7 @@ fn main() -> glib::ExitCode {
                 install_test_hooks(&app);
             }
             std::mem::forget(gtk_app.hold());
+            quit_on_signals(&app);
             *running.borrow_mut() = Some(app);
         }
     });
@@ -87,6 +90,24 @@ fn main() -> glib::ExitCode {
         }
     });
     gtk_app.run()
+}
+
+/// The default action of SIGTERM and SIGINT ends the process before the index save that waits.
+fn quit_on_signals(app: &Rc<App>) {
+    let mut signals = match async_signal::Signals::new([Signal::Term, Signal::Int]) {
+        Ok(signals) => signals,
+        Err(error) => {
+            eprintln!("insert: cannot handle SIGTERM and SIGINT: {error}");
+            return;
+        }
+    };
+    let weak = Rc::downgrade(app);
+    glib::spawn_future_local(async move {
+        while signals.next().await.is_some() {
+            let Some(app) = weak.upgrade() else { return };
+            app.quit();
+        }
+    });
 }
 
 fn activation_token(command_line: &gio::ApplicationCommandLine) -> Option<String> {

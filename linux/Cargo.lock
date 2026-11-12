@@ -1036,6 +1036,7 @@ name = "insert"
 version = "0.1.0"
 dependencies = [
  "async-channel",
+ "async-signal",
  "futures-lite",
  "gtk4",
  "insert-core",
