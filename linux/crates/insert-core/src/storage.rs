@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::fs;
 use std::io::{self, Write};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -12,6 +13,9 @@ use crate::model::{Clip, ClipId, Pinboard};
 
 const APP_DIR: &str = "insert";
 const CORRUPT_INDEX_PREFIX: &str = "index.json.corrupt-";
+/// Clips and preferences can hold passwords and private text. Only the user can read them.
+const PRIVATE_DIR_MODE: u32 = 0o700;
+const PRIVATE_FILE_MODE: u32 = 0o600;
 
 /// The XDG base directories of Insert.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -170,13 +174,15 @@ impl Storage {
         payload: &MimeMap,
         thumbnail_png: Option<&[u8]>,
     ) -> io::Result<()> {
+        create_private_dir(&self.root)?;
+        create_private_dir(&self.payloads_dir())?;
         let partial = self.payloads_dir().join(format!(".{id}.partial"));
         if partial.exists() {
             fs::remove_dir_all(&partial)?;
         }
-        fs::create_dir_all(&partial)?;
+        create_private_dir(&partial)?;
         for (mime, data) in &payload.0 {
-            let mut file = fs::File::create(partial.join(encode_file_name(mime)))?;
+            let mut file = create_private_file(&partial.join(encode_file_name(mime)))?;
             file.write_all(data)?;
             file.sync_all()?;
         }
@@ -240,20 +246,43 @@ impl Storage {
     }
 }
 
-/// Writes a temp file next to `path`, flushes it, and renames it over `path`.
+/// Writes a private temp file next to `path`, flushes it, and renames it over `path`. The
+/// directory of `path` becomes private too.
 pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let dir = path
         .parent()
         .ok_or_else(|| io::Error::other("path has no parent"))?;
-    fs::create_dir_all(dir)?;
+    create_private_dir(dir)?;
     let name = path
         .file_name()
         .ok_or_else(|| io::Error::other("path has no file name"))?;
     let temp = dir.join(format!(".{}.tmp", name.to_string_lossy()));
-    let mut file = fs::File::create(&temp)?;
+    let mut file = create_private_file(&temp)?;
     file.write_all(bytes)?;
     file.sync_all()?;
     fs::rename(&temp, path)
+}
+
+/// Creates `dir` and its missing parents with mode 0700. An existing `dir` also gets mode 0700,
+/// because an earlier version of Insert created it with the default mode.
+fn create_private_dir(dir: &Path) -> io::Result<()> {
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(PRIVATE_DIR_MODE)
+        .create(dir)?;
+    fs::set_permissions(dir, fs::Permissions::from_mode(PRIVATE_DIR_MODE))
+}
+
+/// Creates or truncates `path` with mode 0600.
+fn create_private_file(path: &Path) -> io::Result<fs::File> {
+    let file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(PRIVATE_FILE_MODE)
+        .open(path)?;
+    file.set_permissions(fs::Permissions::from_mode(PRIVATE_FILE_MODE))?;
+    Ok(file)
 }
 
 fn encode_file_name(mime: &str) -> String {
@@ -383,6 +412,40 @@ mod tests {
         assert!(!storage.has_payload(orphan));
         assert!(!storage.thumbnail_path(orphan).exists());
         assert_eq!(fs::read_dir(storage.payloads_dir()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn only_the_user_can_read_the_stored_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("insert");
+        fs::create_dir(&root).unwrap();
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o755)).unwrap();
+        let storage = Storage::new(root.clone());
+        let id = ClipId::new();
+        let payload = MimeMap(vec![("text/plain".into(), b"x".to_vec())]);
+        storage.write_clip(id, &payload, Some(b"png")).unwrap();
+        storage.save_index(&[], &[]).unwrap();
+        let preferences = dir.path().join("config/insert/preferences.json");
+        crate::Preferences::default().save(&preferences).unwrap();
+
+        let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        for private_dir in [
+            root.clone(),
+            storage.payloads_dir(),
+            storage.payload_dir(id),
+            storage.thumbnails_dir(),
+            preferences.parent().unwrap().to_owned(),
+        ] {
+            assert_eq!(mode(&private_dir), 0o700, "{}", private_dir.display());
+        }
+        for private_file in [
+            storage.payload_dir(id).join("text%2Fplain"),
+            storage.thumbnail_path(id),
+            storage.index_path(),
+            preferences,
+        ] {
+            assert_eq!(mode(&private_file), 0o600, "{}", private_file.display());
+        }
     }
 
     #[test]
