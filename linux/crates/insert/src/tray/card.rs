@@ -9,7 +9,6 @@ use crate::theme::{appearance, background_class, named_icon};
 pub const CARD_SIZE: i32 = 232;
 const HEADER_HEIGHT: i32 = 52;
 const APP_ICON_SIZE: i32 = 64;
-/// The app icon bleeds this far out of the card's right edge.
 const APP_ICON_BLEED: i32 = 12;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -19,7 +18,6 @@ pub enum Ring {
     Secondary,
 }
 
-/// One clip card. The body is built once per clip; `update` refreshes what can change.
 pub struct Card {
     pub root: gtk::Box,
     title: gtk::Label,
@@ -141,7 +139,6 @@ impl Card {
         set_class(&self.root, "secondary", ring == Ring::Secondary);
     }
 
-    /// `Some(n)` shows "Ctrl+n".
     pub fn set_badge(&self, number: Option<usize>) {
         if let Some(n) = number {
             self.badge.set_text(&format!("Ctrl+{n}"));

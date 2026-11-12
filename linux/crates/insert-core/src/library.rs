@@ -23,7 +23,6 @@ pub enum Scope {
 pub struct Change {
     pub clips: bool,
     pub pinboards: bool,
-    /// Clips that left the library. Their files are already deleted.
     pub removed: Vec<ClipId>,
 }
 
@@ -80,7 +79,6 @@ impl EmptyState {
     }
 }
 
-/// The empty state to show when `Library::visible` returns no clips.
 pub fn empty_state(scope: Scope, kind: Option<ClipKind>, query: &str) -> EmptyState {
     if !query.trim().is_empty() || kind.is_some() {
         return EmptyState::NoMatches;
@@ -95,7 +93,6 @@ pub fn empty_state(scope: Scope, kind: Option<ClipKind>, query: &str) -> EmptySt
 pub enum NameTarget {
     Clip(ClipId),
     Pinboard(PinboardId),
-    /// From the "+" button (no clips) or from "Pin to > New Pinboard…" (the clips to pin).
     NewPinboard {
         pinning: HashSet<ClipId>,
     },
@@ -115,13 +112,11 @@ impl NameTarget {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct NameCommit {
     pub change: Change,
-    /// Set when the tray must switch to a new pinboard.
     pub switch_to: Option<Scope>,
 }
 
 pub struct Opened {
     pub library: Library,
-    /// Set when `index.json` did not parse and was moved aside. Tell the user.
     pub corrupt_backup: Option<PathBuf>,
 }
 
@@ -241,7 +236,6 @@ impl Library {
         }))
     }
 
-    /// After a paste or copy from the tray.
     pub fn move_to_front(&mut self, id: ClipId, now: OffsetDateTime) -> Change {
         let now = whole_seconds(now);
         self.update(|clips| move_to_front(clips, id, now, |_| {}))
@@ -252,7 +246,6 @@ impl Library {
         self.update(|clips| clips.retain(|clip| !ids.contains(&clip.id)))
     }
 
-    /// Deletes every clip that is not in a pinboard.
     pub fn clear_history(&mut self) -> Change {
         self.update(|clips| clips.retain(|clip| clip.pinboard_id.is_some()))
     }
@@ -316,7 +309,6 @@ impl Library {
         }))
     }
 
-    /// The text that the name prompt starts with.
     pub fn current_name(&self, target: &NameTarget) -> String {
         match target {
             NameTarget::Clip(id) => self.clip(*id).and_then(|clip| clip.custom_title.clone()),
@@ -326,7 +318,7 @@ impl Library {
         .unwrap_or_default()
     }
 
-    /// Applies the name prompt (spec 4.8). `text` is trimmed first.
+    /// `text` is trimmed first.
     pub fn commit_name(&mut self, target: &NameTarget, text: &str) -> NameCommit {
         let name = text.trim();
         match target {
@@ -376,7 +368,6 @@ impl Library {
             .collect()
     }
 
-    /// History, then each pinboard in tab order.
     pub fn scopes(&self) -> Vec<Scope> {
         std::iter::once(Scope::History)
             .chain(
@@ -455,7 +446,6 @@ fn move_to_front(
     }
 }
 
-/// Keeps the first `limit` unpinned clips (newest first). Pinned clips never count.
 fn trim(clips: &mut Vec<Clip>, limit: HistoryLimit) {
     let mut unpinned = 0;
     clips.retain(|clip| {

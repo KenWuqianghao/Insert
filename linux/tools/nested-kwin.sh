@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Runs a script inside a private D-Bus session and a virtual 1280x800 KWin.
 # Keys and windows stay out of the real desktop. WAYLAND_DISPLAY is set before the D-Bus session starts,
 # so services that D-Bus activates (portals) also open their windows in the virtual KWin.
 # Example: linux/tools/nested-kwin.sh ./my-test.sh

@@ -1,5 +1,3 @@
-//! Prints the active app each time it changes.
-
 use insert_platform::active_app::ActiveAppTracker;
 
 fn main() {

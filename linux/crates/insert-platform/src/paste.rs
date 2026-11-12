@@ -1,5 +1,3 @@
-//! Key injection for "paste directly" through the XDG RemoteDesktop portal.
-
 use std::fs;
 use std::io;
 use std::os::unix::fs::OpenOptionsExt;
@@ -18,7 +16,6 @@ const KEYSYM_SHIFT_R: i32 = 0xffe2;
 const KEYSYM_V: i32 = 0x0076;
 const KEYSYM_INSERT: i32 = 0xff63;
 
-/// The keys that paste in the app that has the focus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PasteKeys {
     CtrlV,
@@ -36,7 +33,6 @@ impl PasteKeys {
         }
     }
 
-    /// The modifier key, then the key.
     fn keysyms(self) -> (i32, i32) {
         match self {
             Self::CtrlV => (KEYSYM_CONTROL_L, KEYSYM_V),
@@ -53,7 +49,6 @@ pub enum PasteError {
     Unavailable(String),
 }
 
-/// An open RemoteDesktop session with a keyboard device.
 pub struct PasteInjector {
     portal: RemoteDesktop,
     session: Session<RemoteDesktop>,
@@ -102,7 +97,6 @@ impl PasteInjector {
         Ok(Self { portal, session })
     }
 
-    /// Presses `keys` in the focused window.
     pub async fn send_paste(&self, keys: PasteKeys) -> Result<(), PasteError> {
         let (modifier, key) = keys.keysyms();
         // The user can still hold Shift from Shift+Return. With it, Ctrl+V becomes Ctrl+Shift+V, the shortcut
@@ -134,7 +128,6 @@ fn unavailable(error: ashpd::Error) -> PasteError {
     PasteError::Unavailable(error.to_string())
 }
 
-/// Writes `token` to `path`, or removes the file when there is no token.
 fn store_token(path: &Path, token: Option<&str>) {
     let stored = match token {
         Some(token) => write_private(path, token),

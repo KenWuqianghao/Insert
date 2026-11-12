@@ -1,5 +1,3 @@
-/// Clipboard data as ordered `(MIME type, bytes)` entries. The platform reads a selection into
-/// one of these, and storage keeps the payload of each clip as one of these.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MimeMap(pub Vec<(String, Vec<u8>)>);
 
@@ -46,7 +44,6 @@ impl MimeMap {
         self.url_and_title().map(|(url, _)| url)
     }
 
-    /// A clipboard offer that holds only `text`.
     pub fn from_plain_text(text: &str) -> Self {
         Self(vec![(UTF8_TEXT.to_owned(), text.as_bytes().to_vec())]).for_clipboard()
     }
@@ -115,7 +112,6 @@ impl MimeMap {
         url::Url::parse(&candidate.0).ok().map(|_| candidate)
     }
 
-    /// The best image entry, for the preview.
     pub fn image(&self) -> Option<&[u8]> {
         self.0
             .iter()
@@ -171,7 +167,7 @@ pub(crate) enum TextEncoding {
     Latin1,
 }
 
-/// Text targets in order of preference. `STRING` is Latin-1 by the X11 rules.
+/// `STRING` is Latin-1 by the X11 rules.
 pub(crate) fn text_source(mime: &str) -> Option<(usize, TextEncoding)> {
     let normalized: String = mime
         .chars()
@@ -187,7 +183,6 @@ pub(crate) fn text_source(mime: &str) -> Option<(usize, TextEncoding)> {
     }
 }
 
-/// Lower is better. SVG is stored, but it is not an image kind.
 pub(crate) fn image_rank(mime: &str) -> Option<usize> {
     if mime == "image/svg+xml" || !mime.starts_with("image/") {
         return None;
@@ -216,7 +211,6 @@ pub(crate) fn is_privacy_marker(mime: &str) -> bool {
     PRIVACY_MARKERS.contains(&mime)
 }
 
-/// Stored as is. Text and images go through a separate pick.
 pub(crate) fn is_plain_stored(mime: &str) -> bool {
     is_rich_text(mime) || OTHER_STORED.contains(&mime) || is_media(mime) || is_volatile(mime)
 }

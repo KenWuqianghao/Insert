@@ -1,6 +1,3 @@
-//! Colors and CSS. The desktop appearance (dark or light, accent color) is read one time at
-//! startup from the XDG Settings portal, as GTK itself does.
-
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 
@@ -49,8 +46,6 @@ pub fn install(display: &gdk::Display) {
     });
 }
 
-/// A CSS class that sets the background to `rgb`. Header tints, color clips, and pinboard dots
-/// use it.
 pub fn background_class(rgb: Rgb) -> String {
     let name = format!("bg-{:02x}{:02x}{:02x}", rgb.r, rgb.g, rgb.b);
     COLOR_CLASSES.with(|classes| {
@@ -66,7 +61,6 @@ pub fn background_class(rgb: Rgb) -> String {
     name
 }
 
-/// A symbolic icon with fallbacks, for names that differ between Adwaita and Breeze.
 pub fn icon(names: &[&str]) -> gtk::Image {
     gtk::Image::from_gicon(&gio::ThemedIcon::from_names(names))
 }
@@ -78,7 +72,6 @@ const ALTERNATES: &[(&str, &[&str])] = &[
     ("preferences-system-privacy-symbolic", &["security-high-symbolic"]),
 ];
 
-/// An icon by its Adwaita name, with the Breeze name as a fallback.
 pub fn named_gicon(name: &str) -> gio::ThemedIcon {
     let mut names = vec![name];
     if let Some((_, alternates)) = ALTERNATES.iter().find(|(n, _)| *n == name) {

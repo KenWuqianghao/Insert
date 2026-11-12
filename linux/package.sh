@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Builds the release binary in the container and writes linux/dist/insert-linux-x86_64.tar.gz.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 name=insert-linux-x86_64

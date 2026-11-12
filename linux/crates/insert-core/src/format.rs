@@ -72,7 +72,6 @@ pub fn grapheme_count(text: &str) -> usize {
     text.graphemes(true).count()
 }
 
-/// The first `count` grapheme clusters of `text`.
 pub fn grapheme_prefix(text: &str, count: usize) -> &str {
     match text.grapheme_indices(true).nth(count) {
         Some((end, _)) => &text[..end],

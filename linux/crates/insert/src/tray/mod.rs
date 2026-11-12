@@ -1,5 +1,3 @@
-//! The tray: a transparent full-screen window with the card tray at the bottom edge.
-
 mod card;
 mod control;
 mod keys;
@@ -24,7 +22,6 @@ use card::{set_class, Card, Ring};
 pub use keys::parse_test_key;
 use model::{TrayModel, TrayState};
 
-/// The desktop finds the tray window by this title to give it the focus and its role.
 pub const WINDOW_TITLE: &str = "Insert";
 const SHOW_MS: u32 = 220;
 const HIDE_MS: u32 = 160;
@@ -32,7 +29,6 @@ const MODE_MS: u32 = 200;
 const STRIP_HEIGHT: i32 = 270;
 const MENU_FOCUS_GRACE: std::time::Duration = std::time::Duration::from_millis(150);
 
-/// Which notices the top bar shows.
 #[derive(Clone, Copy)]
 pub struct Notices {
     pub paused: bool,
@@ -41,7 +37,6 @@ pub struct Notices {
     pub capture_unavailable: bool,
 }
 
-/// A notice pill in the top bar.
 struct Notice {
     root: gtk::Box,
 }
@@ -67,7 +62,6 @@ impl Notice {
 pub struct Tray {
     pub window: gtk::ApplicationWindow,
     pub model: RefCell<TrayModel>,
-    /// True while `render` changes widgets, so their change signals are ignored.
     rendering: Cell<bool>,
     composing: Cell<bool>,
     revealer: gtk::Revealer,
@@ -97,14 +91,10 @@ pub struct Tray {
     prompt_revealer: gtk::Revealer,
     prompt_title: gtk::Label,
     prompt_entry: gtk::Entry,
-    /// The cards that a row shows now.
     cards: RefCell<HashMap<ClipId, Card>>,
-    /// The list row that shows each bound card now.
     bound: RefCell<HashMap<ClipId, glib::WeakRef<gtk::ListItem>>>,
-    /// New clips that play the insert animation when their card is bound.
     appearing: RefCell<HashSet<ClipId>>,
     actions: gio::SimpleActionGroup,
-    /// The pinboard whose tab menu is open.
     pub menu_pinboard: Cell<Option<PinboardId>>,
     menu_open: Cell<bool>,
     app: Weak<App>,
@@ -129,7 +119,6 @@ impl Tray {
         panel.add_css_class("tray");
 
         let preview_slot = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        // The preview height is fixed by the screen, whatever the content asks for.
         let preview_frame = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
             .vscrollbar_policy(gtk::PolicyType::External)
@@ -448,8 +437,6 @@ impl Tray {
         self.focus_field();
     }
 
-    /// Starts the hide animation. The app's `finish_hide` runs when it ends, at once if the
-    /// window is not mapped.
     pub fn start_hide(&self) {
         self.panel.remove_css_class("shown");
         self.revealer.set_transition_duration(HIDE_MS);
@@ -464,7 +451,6 @@ impl Tray {
     }
 
     #[cfg(feature = "test-hooks")]
-    /// Test hook: types into the focused text field, as the keyboard would.
     pub fn type_text(&self, text: &str) {
         if let Some(editable) = self.focused_editable() {
             let mut position = editable.position();
@@ -474,7 +460,6 @@ impl Tray {
     }
 
     #[cfg(feature = "test-hooks")]
-    /// Test hook: what the focused field does with a key that ran no command.
     pub fn edit_field(&self, key: insert_core::Key) {
         let Some(editable) = self.focused_editable() else { return };
         match key {
@@ -495,7 +480,6 @@ impl Tray {
         GtkWindowExt::focus(&self.window).and_downcast::<gtk::Editable>()
     }
 
-    /// After a menu closes, focus comes back to the tray unless the user clicked another app.
     pub fn set_menu_open(&self, open: bool) {
         self.menu_open.set(open);
         if !open {
@@ -521,7 +505,6 @@ impl Tray {
         self.composing.get()
     }
 
-    /// Brings every widget in line with the model and the library.
     pub fn render(&self, library: &Library, notices: Notices) {
         self.rendering.set(true);
         let model = self.model.borrow();
@@ -694,7 +677,6 @@ impl Tray {
         self.tabs.append(&plus);
     }
 
-    /// Puts the selection ring and the number badge on each card that a row shows now.
     pub fn restyle(&self, model: &TrayModel, library: &Library) {
         let cards = self.cards.borrow();
         let now = OffsetDateTime::now_utc();
@@ -738,7 +720,6 @@ impl Tray {
         }
     }
 
-    /// Shows the card of `id` in `item`, and takes it from the row that showed it before.
     pub fn attach_card(&self, id: ClipId, item: &gtk::ListItem) {
         let Some(root) = self.card_widget(id) else { return };
         if self.appearing.borrow_mut().remove(&id) {
@@ -762,8 +743,6 @@ impl Tray {
         item.set_child(Some(&root));
     }
 
-    /// A card lives while a row shows it. The list view binds only the rows near the visible
-    /// part of the strip, so the cards and their textures stay few.
     fn unbind_card(&self, item: &gtk::ListItem) {
         let Some(id) = item_clip_id(item) else { return };
         let shown_here = {

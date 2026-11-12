@@ -17,9 +17,6 @@ use gtk::{gio, glib, prelude::*};
 
 use app::App;
 
-/// A signal handler that holds the app weakly. `with_app!(weak => app, |args| body)` binds the
-/// live `&Rc<App>` to `app` in the body. When the app is gone, the handler returns the default
-/// value, or the value after `or`.
 macro_rules! with_app {
     ($weak:expr => $app:ident, |$($arg:pat_param),*| $body:expr) => {
         with_app!($weak => $app or Default::default(), |$($arg),*| $body)

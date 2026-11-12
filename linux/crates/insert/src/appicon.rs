@@ -1,5 +1,3 @@
-//! The icon and header tint of a clip's source app, resolved one time per app id.
-
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -34,7 +32,6 @@ pub fn app_visual(source: Option<&SourceApp>) -> AppVisual {
     visual
 }
 
-/// The installed app for a desktop file id.
 pub fn desktop_app(id: &str) -> Option<gio::AppInfo> {
     let key = app_id_key(id);
     gio::AppInfo::all()
@@ -42,7 +39,7 @@ pub fn desktop_app(id: &str) -> Option<gio::AppInfo> {
         .find(|info| desktop_id(info).is_some_and(|found| app_id_key(&found) == key))
 }
 
-/// The desktop file id of an installed app. GIO adds the `.desktop` file suffix to the id.
+/// GIO adds the `.desktop` file suffix to the id.
 pub fn desktop_id(info: &gio::AppInfo) -> Option<String> {
     info.id().map(|id| strip_desktop_suffix(&id).to_owned())
 }
@@ -62,7 +59,6 @@ fn resolve(id: &str) -> Option<AppVisual> {
     })
 }
 
-/// The icon as straight RGBA at 24 × 24.
 fn icon_pixels(icon: &gio::Icon) -> Option<Vec<u8>> {
     let display = gdk::Display::default()?;
     let paintable = gtk::IconTheme::for_display(&display).lookup_by_gicon(

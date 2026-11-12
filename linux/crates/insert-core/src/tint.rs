@@ -1,6 +1,5 @@
 use crate::model::Rgb;
 
-/// The card header color for clips with no source app icon.
 pub const NEUTRAL_TINT: Rgb = Rgb {
     r: 0x6B,
     g: 0x6B,
@@ -15,7 +14,7 @@ struct Bucket {
     blue: f64,
 }
 
-/// The card header color for an app icon (spec 3.3). `rgba` holds straight (not premultiplied)
+/// `rgba` holds straight (not premultiplied)
 /// RGBA pixels of the icon at about 24 × 24.
 pub fn header_tint(rgba: &[u8]) -> Rgb {
     let mut buckets = [Bucket::default(); 12];

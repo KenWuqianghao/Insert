@@ -13,18 +13,13 @@ use crate::model::{Clip, ClipId, Pinboard};
 
 const APP_DIR: &str = "insert";
 const CORRUPT_INDEX_PREFIX: &str = "index.json.corrupt-";
-/// Clips and preferences can hold passwords and private text. Only the user can read them.
 const PRIVATE_DIR_MODE: u32 = 0o700;
 const PRIVATE_FILE_MODE: u32 = 0o600;
 
-/// The XDG base directories of Insert.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Paths {
-    /// Clips: `$XDG_DATA_HOME/insert`.
     pub data_dir: PathBuf,
-    /// Preferences: `$XDG_CONFIG_HOME/insert`.
     pub config_dir: PathBuf,
-    /// The portal restore token: `$XDG_STATE_HOME/insert`.
     pub state_dir: PathBuf,
 }
 
@@ -51,7 +46,6 @@ impl Paths {
         self.config_dir.join("preferences.json")
     }
 
-    /// The token that lets "paste directly" start with no permission dialog.
     pub fn restore_token_file(&self) -> PathBuf {
         self.state_dir.join("remote-desktop-token")
     }
@@ -72,11 +66,9 @@ struct IndexRef<'a> {
 #[derive(Debug)]
 pub struct LoadedIndex {
     pub index: LibraryIndex,
-    /// Where a corrupt `index.json` was moved before Insert started with an empty library.
     pub corrupt_backup: Option<PathBuf>,
 }
 
-/// Files under the data directory: `index.json`, `payloads/<id>/<MIME>`, `thumbnails/<id>.png`.
 #[derive(Clone, Debug)]
 pub struct Storage {
     root: PathBuf,
@@ -193,7 +185,6 @@ impl Storage {
         Ok(())
     }
 
-    /// Entries are sorted by MIME name.
     pub fn load_payload(&self, id: ClipId) -> io::Result<MimeMap> {
         let mut entries = Vec::new();
         for entry in fs::read_dir(self.payload_dir(id))? {
@@ -259,8 +250,6 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     fs::rename(&temp, path)
 }
 
-/// Creates `dir` and its missing parents with mode 0700. An existing `dir` also gets mode 0700,
-/// because an earlier version of Insert created it with the default mode.
 fn create_private_dir(dir: &Path) -> io::Result<()> {
     fs::DirBuilder::new()
         .recursive(true)
@@ -269,7 +258,6 @@ fn create_private_dir(dir: &Path) -> io::Result<()> {
     fs::set_permissions(dir, fs::Permissions::from_mode(PRIVATE_DIR_MODE))
 }
 
-/// Creates or truncates `path` with mode 0600.
 fn create_private_file(path: &Path) -> io::Result<fs::File> {
     let file = fs::OpenOptions::new()
         .write(true)

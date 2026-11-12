@@ -1,7 +1,4 @@
-//! Clipboard capture and clipboard writes through the Wayland data-control protocols.
-//!
-//! The watcher owns a thread and a Wayland connection. Data-control needs no keyboard focus, so the app can
-//! write the clipboard after its window hides.
+//! Data-control needs no keyboard focus, so the app can write the clipboard after its window hides.
 
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
@@ -137,7 +134,6 @@ impl ClipboardWatcher {
 
     fn send(&self, command: Command) -> Result<(), ClipboardError> {
         self.commands.send(command).map_err(|_| ClipboardError::NotRunning)?;
-        // A full pipe already has a wake-up in it.
         let _ = (&self.wake).write(&[1]);
         Ok(())
     }
@@ -152,8 +148,6 @@ impl Drop for ClipboardWatcher {
     }
 }
 
-/// The reply to a command. A caller that timed out returned `Timeout` and does not wait any more.
-/// Its command must then not run, because the caller can have set newer content since.
 struct Done {
     result: mpsc::SyncSender<Result<(), String>>,
     abandoned: Arc<AtomicBool>,
@@ -318,7 +312,6 @@ struct State {
     transfer: Option<Transfer>,
     owned: Option<OwnedSelection>,
     owned_primary: Option<OwnedSelection>,
-    /// True until the first roundtrip ends, so the clipboard content at start gives no event.
     starting: bool,
     stop: Option<Result<(), String>>,
 }
@@ -438,7 +431,6 @@ impl State {
         let mut selections = self.owned.iter().chain(&self.owned_primary);
         let Some(owned) = selections.find(|owned| &owned.source.id() == source) else { return };
         let data = Arc::clone(&owned.data);
-        // A slow reader must not stop the event loop.
         std::thread::spawn(move || {
             if let Some(bytes) = data.get(&mime) {
                 let _ = File::from(fd).write_all(bytes);

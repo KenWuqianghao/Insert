@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs cargo inside the build container. Example: linux/build.sh build --release
+# Example: linux/build.sh build --release
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 image=insert-linux-build

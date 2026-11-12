@@ -2,9 +2,6 @@ use gtk4 as gtk;
 use gtk::{gdk, prelude::*};
 use insert_core::{Key, Modifiers};
 
-/// The key-table form of a GDK key press, or `None` for a key the table never names
-/// (a modifier key alone, a function key). `first_layout` gives the characters of the key's
-/// place on the first keyboard layout, at the levels without and with Shift.
 pub fn translate(
     keyval: gdk::Key,
     state: gdk::ModifierType,
@@ -39,7 +36,6 @@ pub fn translate(
     Some((key, modifiers))
 }
 
-/// The characters at the levels without and with Shift of `keycode` on the first layout.
 pub fn first_layout_chars(display: &gdk::Display, keycode: u32) -> [Option<char>; 2] {
     let keys = display.map_keycode(keycode).unwrap_or_default();
     [0, 1].map(|level| {
@@ -69,7 +65,6 @@ fn shortcut_char(typed: char, [plain, shifted]: [Option<char>; 2]) -> char {
 }
 
 #[cfg(feature = "test-hooks")]
-/// A key for the `test-key` hook, written like "Down", "ctrl+1", "shift+Return", or "space".
 pub fn parse_test_key(spec: &str) -> Option<(Key, Modifiers)> {
     let mut modifiers = Modifiers::NONE;
     let mut parts: Vec<&str> = spec.split('+').collect();

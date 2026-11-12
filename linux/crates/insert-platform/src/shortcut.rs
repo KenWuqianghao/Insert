@@ -1,5 +1,3 @@
-//! The global shortcut that toggles the tray, through the XDG GlobalShortcuts portal.
-
 use std::pin::{pin, Pin};
 use std::sync::Arc;
 
@@ -81,7 +79,6 @@ impl GlobalShortcut {
         Ok(Self { portal, session, stop })
     }
 
-    /// True when `configure` can open the shortcut settings of the desktop.
     pub fn can_configure(&self) -> bool {
         self.portal.version() >= CONFIGURE_VERSION
     }

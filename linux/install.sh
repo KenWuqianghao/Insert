@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Installs Insert for the current user. No root access is necessary.
 #   install.sh              install or update
 #   install.sh --uninstall  remove the program files; the clips and the settings stay
-# Works from the repository (after `linux/build.sh build --release`) and from the release archive.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 app_id=io.github.kenwuqianghao.Insert

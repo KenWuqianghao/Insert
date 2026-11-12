@@ -1,5 +1,3 @@
-//! The StatusNotifierItem icon and its menu.
-
 use ksni::blocking::{Handle, TrayMethods};
 use ksni::menu::{MenuItem, StandardItem};
 
@@ -35,7 +33,6 @@ impl TrayIcon {
             .map_err(|error| TrayIconError::Unavailable(error.to_string()))
     }
 
-    /// Changes the icon and the label of the pause item.
     pub fn set_paused(&self, paused: bool) {
         self.handle.update(|tray| tray.paused = paused);
     }
@@ -66,7 +63,6 @@ impl InsertTray {
 }
 
 impl ksni::Tray for InsertTray {
-    // The macOS menu bar item opens its menu on a click.
     const MENU_ON_ACTIVATE: bool = true;
 
     fn id(&self) -> String {

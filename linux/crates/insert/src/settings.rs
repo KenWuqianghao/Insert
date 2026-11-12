@@ -1,5 +1,3 @@
-//! The Settings window: General and Privacy panes (spec 7).
-
 use std::cell::Cell;
 use std::rc::Rc;
 
@@ -20,7 +18,6 @@ const PANES: [(&str, &str, &[&str]); 2] = [
 
 pub struct SettingsWindow {
     pub window: gtk::Window,
-    /// True while `refresh` sets controls, so their signals are ignored.
     updating: Cell<bool>,
     login: gtk::Switch,
     login_warning: Warning,
@@ -263,7 +260,7 @@ impl SettingsWindow {
     pub fn refresh(&self, app: &Rc<App>) {
         self.updating.set(true);
         let prefs = app.prefs.borrow();
-        self.login.set_active(prefs.launch_at_login);
+        self.login.set_active(app.services.launch_at_login());
         self.tray_icon.set_active(prefs.show_tray_icon);
         self.paste.set_active(prefs.paste_directly);
         self.pause.set_active(prefs.capture_paused);
@@ -431,7 +428,6 @@ fn ignored_row(app: &Rc<App>, ignored: &SourceApp) -> gtk::Widget {
     row.upcast()
 }
 
-/// The Linux form of the macOS "Add App…" file dialog: installed apps, multiple selection.
 fn show_app_picker(app: &Rc<App>, parent: Option<&gtk::Window>) {
     let dialog = gtk::Window::builder()
         .title("Add Ignored Apps")

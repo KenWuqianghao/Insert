@@ -1,5 +1,3 @@
-//! Launch at login through an XDG autostart desktop file.
-
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};

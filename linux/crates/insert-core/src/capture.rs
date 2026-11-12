@@ -16,7 +16,6 @@ use crate::model::{
 pub const MAX_CAPTURE_BYTES: u64 = 50 * 1024 * 1024;
 pub const THUMBNAIL_MAX_SIDE: u32 = 560;
 
-/// A classified clipboard selection, ready for `Library::insert`.
 #[derive(Clone, Debug)]
 pub struct Capture {
     pub content: ClipContent,
@@ -29,13 +28,9 @@ pub struct Capture {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Skip {
-    /// A password manager or another app marked the selection as secret.
     Concealed,
-    /// The stored entries are larger than `MAX_CAPTURE_BYTES`.
     TooLarge,
-    /// No entry has a stored type and data.
     NothingStored,
-    /// The selection has only blank text.
     Blank,
 }
 
@@ -60,7 +55,6 @@ fn is_concealed(offer: &MimeMap) -> bool {
     })
 }
 
-/// Keeps stored types with data, one UTF-8 text entry, and one image entry. Sorted by MIME name.
 fn stored_payload(offer: MimeMap) -> Result<MimeMap, Skip> {
     let mut text: Option<(usize, String)> = None;
     let mut image: Option<(usize, String, Vec<u8>)> = None;
@@ -145,7 +139,6 @@ pub fn content_hash(payload: &MimeMap) -> ContentHash {
     )
 }
 
-/// Spec 2.3: the first rule that matches wins.
 fn classify_payload(payload: &MimeMap) -> Result<(ClipContent, Option<Vec<u8>>), Skip> {
     let files = payload.file_uris();
     if !files.is_empty() {
@@ -223,14 +216,11 @@ fn image_reader(data: &[u8]) -> Option<ImageReader<Cursor<&[u8]>>> {
         .ok()
 }
 
-/// The pixel size from the image header. `None` if the data is not an image that Insert reads.
 fn image_size(data: &[u8]) -> Option<PixelSize> {
     let (width, height) = image_reader(data)?.into_dimensions().ok()?;
     (width > 0 && height > 0).then_some(PixelSize { width, height })
 }
 
-/// A PNG with its longest side at most `THUMBNAIL_MAX_SIDE`. `None` if the image does not decode
-/// within the decode limits.
 fn thumbnail(data: &[u8]) -> Option<Vec<u8>> {
     let mut limits = Limits::default();
     limits.max_image_width = Some(MAX_DECODED_SIDE);
@@ -315,8 +305,6 @@ fn strip_html(html: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// The visible text of an RTF document. Covers paragraphs, tabs, `\'hh` and `\uN` escapes, and
-/// skips destinations such as the font table.
 fn rtf_to_text(rtf: &[u8]) -> String {
     const SKIPPED: [&str; 16] = [
         "fonttbl",
@@ -585,7 +573,6 @@ mod tests {
         assert_eq!((thumbnail.width(), thumbnail.height()), (40, 30));
     }
 
-    /// A PNG header that declares `width` x `height` RGBA pixels, with no pixel data.
     fn png_header(width: u32, height: u32) -> Vec<u8> {
         fn crc32(bytes: &[u8]) -> u32 {
             let mut crc = !0u32;

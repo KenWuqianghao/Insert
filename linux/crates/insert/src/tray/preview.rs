@@ -10,7 +10,6 @@ use crate::theme::named_icon;
 
 const FULL_TEXT_LIMIT: usize = 200_000;
 
-/// The preview of one clip: a header row and a content box that fills the rest.
 pub fn build(clip: &Clip, library: &Library) -> gtk::Widget {
     let column = gtk::Box::new(gtk::Orientation::Vertical, 12);
     column.set_margin_start(22);
@@ -153,7 +152,6 @@ fn content_for(clip: &Clip, library: &Library) -> gtk::Widget {
     }
 }
 
-/// The index keeps the first 8,000 characters. Longer text comes from the payload.
 fn full_text(clip: &Clip, snippet: &TextSnippet, library: &Library) -> String {
     if snippet.character_count <= TextSnippet::LIMIT {
         return snippet.text.clone();

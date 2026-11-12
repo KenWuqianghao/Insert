@@ -1,4 +1,3 @@
-/// A key press in the tray, already translated from the toolkit's key value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Key {
     Left,
@@ -17,7 +16,6 @@ pub enum Key {
     Char(char),
 }
 
-/// Ctrl takes the role of the macOS Command key. Alt and Super take the roles of Option and Control.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Modifiers {
     pub ctrl: bool,
@@ -54,7 +52,6 @@ pub enum TrayMode {
 pub struct KeyContext {
     pub mode: TrayMode,
     pub query_is_empty: bool,
-    /// The focused text field has IME preedit text. Then every key goes to the field.
     pub composing: bool,
 }
 
@@ -70,17 +67,13 @@ pub enum PanelCommand {
     Move(isize),
     Extend(isize),
     SelectAll,
-    /// On the primary clip.
     Activate(PasteAction),
-    /// Paste the visible card at this index, whatever the selection.
     ActivateIndex(usize),
     DeleteSelection,
     TogglePreview,
-    /// Apply `cancel_effect`.
     Cancel,
     SwitchScope(isize),
     OpenSettings,
-    /// Hide the tray. Ctrl+Q must not quit Insert by accident.
     Hide,
 }
 
@@ -122,8 +115,6 @@ const NONE: Modifiers = Modifiers::NONE;
 const SHIFT: Modifiers = Modifiers::SHIFT;
 const CTRL: Modifiers = Modifiers::CTRL;
 
-/// Spec 4.2 with Ctrl in place of Command. The first matching row wins. A key with no row goes
-/// to the focused text field, so Ctrl+V, Ctrl+X, and Ctrl+Z edit the search text.
 const BINDINGS: &[Binding] = &[
     bind(Char('q'), CTRL, Always, Hide),
     bind(Char('w'), CTRL, Always, Hide),
@@ -216,13 +207,11 @@ pub fn command_for_key(
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CancelEffect {
-    /// Leave preview or naming.
     Browse,
     ClearQuery,
     HideTray,
 }
 
-/// What Esc does (spec 4.6). The type filter stays until the next show.
 pub fn cancel_effect(mode: TrayMode, query: &str) -> CancelEffect {
     match mode {
         TrayMode::Previewing | TrayMode::Naming => CancelEffect::Browse,

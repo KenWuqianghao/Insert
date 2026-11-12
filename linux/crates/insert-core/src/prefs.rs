@@ -39,7 +39,6 @@ impl HistoryLimit {
             .find(|limit| limit.count() as u64 == count)
     }
 
-    /// For example "1,000 clips".
     pub fn label(self) -> String {
         format!("{} clips", format_count(self.count()))
     }
@@ -49,10 +48,7 @@ impl HistoryLimit {
 /// gives its default; the other values still load.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Preferences {
-    /// The Linux form of the macOS "Hide the Dock icon" setting, inverted.
     pub show_tray_icon: bool,
-    /// The autostart file is the real state. The app corrects this value from it.
-    pub launch_at_login: bool,
     pub paste_directly: bool,
     pub history_limit: HistoryLimit,
     pub capture_paused: bool,
@@ -63,7 +59,6 @@ impl Default for Preferences {
     fn default() -> Self {
         Self {
             show_tray_icon: true,
-            launch_at_login: false,
             paste_directly: true,
             history_limit: HistoryLimit::default(),
             capture_paused: false,
@@ -92,7 +87,6 @@ impl Preferences {
             |key: &str, default: bool| map.get(key).and_then(Value::as_bool).unwrap_or(default);
         Self {
             show_tray_icon: flag("showTrayIcon", defaults.show_tray_icon),
-            launch_at_login: flag("launchAtLogin", defaults.launch_at_login),
             paste_directly: flag("pasteDirectly", defaults.paste_directly),
             history_limit: map
                 .get("historyLimit")
@@ -115,7 +109,6 @@ impl Preferences {
     pub fn to_json(&self) -> Vec<u8> {
         let value = json!({
             "showTrayIcon": self.show_tray_icon,
-            "launchAtLogin": self.launch_at_login,
             "pasteDirectly": self.paste_directly,
             "historyLimit": self.history_limit.count(),
             "capturePaused": self.capture_paused,
@@ -129,7 +122,6 @@ impl Preferences {
         source.is_some_and(|source| self.ignores_id(&source.id))
     }
 
-    /// True if the list has an app with the same `app_id_key` as `id`.
     pub fn ignores_id(&self, id: &str) -> bool {
         let key = app_id_key(id);
         self.ignored_apps.iter().any(|app| app_id_key(&app.id) == key)
@@ -165,7 +157,7 @@ mod tests {
     fn defaults() {
         let prefs = Preferences::default();
         assert!(prefs.show_tray_icon && prefs.paste_directly);
-        assert!(!prefs.launch_at_login && !prefs.capture_paused);
+        assert!(!prefs.capture_paused);
         assert_eq!(prefs.history_limit.count(), 500);
         assert!(prefs.ignored_apps.is_empty());
     }
@@ -176,7 +168,6 @@ mod tests {
         let path = dir.path().join("insert/preferences.json");
         let prefs = Preferences {
             show_tray_icon: false,
-            launch_at_login: true,
             paste_directly: false,
             history_limit: HistoryLimit::Clips5000,
             capture_paused: true,

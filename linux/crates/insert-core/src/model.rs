@@ -45,7 +45,6 @@ impl Default for PinboardId {
     }
 }
 
-/// SHA-256 of the stored payload, 64 lowercase hex digits.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ContentHash(pub String);
@@ -76,7 +75,6 @@ pub const MAX_DECODED_SIDE: u32 = 16_384;
 pub const MAX_DECODED_BYTES: u64 = 512 * 1024 * 1024;
 
 impl PixelSize {
-    /// True if Insert can decode an image of this size at 4 bytes per pixel.
     pub fn can_decode(self) -> bool {
         self.width <= MAX_DECODED_SIDE
             && self.height <= MAX_DECODED_SIDE
@@ -84,7 +82,6 @@ impl PixelSize {
     }
 }
 
-/// sRGB channels in 0...1.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ColorValue {
     pub red: f64,
@@ -225,7 +222,6 @@ impl ClipKind {
         }
     }
 
-    /// Freedesktop symbolic icon names that exist in the Adwaita theme.
     pub fn icon_name(self) -> &'static str {
         match self {
             Self::Text => "format-justify-left-symbolic",
@@ -252,7 +248,6 @@ pub enum ClipContent {
         title: Option<String>,
     },
     Image(PixelSize),
-    /// `file://` URIs in clipboard order.
     Files(Vec<String>),
     Color(ColorValue),
     Pdf,
@@ -495,7 +490,6 @@ impl PinboardColor {
         }
     }
 
-    /// Apple system colors, light and dark appearance.
     pub fn rgb(self, dark: bool) -> Rgb {
         let (light, dark_value) = match self {
             Self::Red => (0xFF3B30, 0xFF453A),

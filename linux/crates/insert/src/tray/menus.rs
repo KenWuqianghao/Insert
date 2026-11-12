@@ -2,7 +2,6 @@ use gtk4 as gtk;
 use gtk::{gio, prelude::*};
 use insert_core::{Clip, ClipKind, Library, Pinboard, PinboardColor};
 
-/// The filter action's state for "All Types".
 pub const ALL_KINDS: &str = "all";
 
 pub fn kind_key(kind: Option<ClipKind>) -> String {
@@ -46,8 +45,6 @@ pub fn more_menu(paused: bool) -> gio::Menu {
     menu
 }
 
-/// Spec 4.7. Paste, copy, rename, and preview act on `clip`; pin, unpin, and delete act on
-/// the menu targets.
 pub fn clip_menu(clip: &Clip, library: &Library) -> gio::Menu {
     let id = clip.id.to_string();
     let menu = gio::Menu::new();
@@ -84,7 +81,6 @@ pub fn clip_menu(clip: &Clip, library: &Library) -> gio::Menu {
     menu
 }
 
-/// The pinboard color action's state names the current color, so the menu shows a check mark.
 pub fn pinboard_menu(pinboard: &Pinboard) -> gio::Menu {
     let menu = gio::Menu::new();
     let main = gio::Menu::new();

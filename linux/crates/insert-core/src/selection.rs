@@ -11,7 +11,6 @@ pub struct Selection {
 }
 
 impl Selection {
-    /// Selects only `id`. `None` gives an empty selection.
     pub fn only(id: Option<ClipId>) -> Self {
         Self {
             ids: id.into_iter().collect(),
@@ -24,7 +23,6 @@ impl Selection {
         &self.ids
     }
 
-    /// The card that Return pastes, Space previews, and the arrow keys move from.
     pub fn primary(&self) -> Option<ClipId> {
         self.primary
     }
@@ -52,7 +50,6 @@ impl Selection {
         }
     }
 
-    /// Ctrl+click.
     pub fn toggle(&mut self, id: ClipId, visible: &[ClipId]) {
         if self.ids.remove(&id) {
             if self.primary == Some(id) {
@@ -66,7 +63,6 @@ impl Selection {
         }
     }
 
-    /// Shift+click: every card from the anchor to `id`.
     pub fn select_range(&mut self, id: ClipId, visible: &[ClipId]) {
         let position = |id: ClipId| visible.iter().position(|visible| *visible == id);
         let anchor = self.anchor.or(self.primary);
@@ -93,7 +89,6 @@ impl Selection {
         self.anchor = visible.first().copied();
     }
 
-    /// Keeps the selection valid after the visible list changed.
     pub fn reconcile(&mut self, visible: &[ClipId]) {
         let survivors: Vec<ClipId> = visible
             .iter()
@@ -113,7 +108,6 @@ impl Selection {
         }
     }
 
-    /// The selection to show after `removed` leaves the list.
     pub fn after_deleting(&self, removed: &HashSet<ClipId>, visible: &[ClipId]) -> Self {
         if !self.primary.is_some_and(|id| removed.contains(&id)) {
             let mut kept = self.clone();

@@ -1,5 +1,3 @@
-//! The running app: the library, the preferences, the services, and the two windows.
-
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
@@ -27,13 +25,9 @@ pub struct App {
     paths: Paths,
     pub tray: Tray,
     settings: RefCell<Option<Rc<SettingsWindow>>>,
-    /// Captures that wait for `classify`, in copy order.
     captures: async_channel::Sender<(MimeMap, Option<SourceApp>)>,
     save_timer: RefCell<Option<glib::SourceId>>,
-    /// The index did not parse at startup. The tray says so until the user dismisses it.
     pub library_notice: Cell<bool>,
-    /// The desktop does not let Insert watch the clipboard. The tray says so until the user
-    /// dismisses it.
     pub capture_notice: Cell<bool>,
     pub paste_status: Cell<PasteStatus>,
     pub shortcut: RefCell<Shortcut>,
@@ -44,8 +38,7 @@ impl App {
         let display = gtk::gdk::Display::default().expect("a display");
         let paths = Paths::from_env();
         let (services, events) = Services::start(&display, &paths);
-        let mut prefs = Preferences::load(&paths.preferences_file());
-        prefs.launch_at_login = services.launch_at_login();
+        let prefs = Preferences::load(&paths.preferences_file());
         let opened = Library::open(Storage::new(paths.data_dir.clone()), prefs.history_limit);
         if let Some(backup) = &opened.corrupt_backup {
             eprintln!("insert: index.json did not parse; moved to {}", backup.display());
@@ -129,8 +122,6 @@ impl App {
         }
     }
 
-    /// Spec 2: skip while paused or from an ignored app; classify off the main thread, one
-    /// capture at a time, which skips concealed offers; then insert in copy order.
     pub fn capture(&self, offer: MimeMap) {
         let source = self.services.source_app();
         {
@@ -139,7 +130,6 @@ impl App {
                 return;
             }
         }
-        // The receiver lives as long as the app.
         let _ = self.captures.try_send((offer, source));
     }
 
@@ -164,7 +154,6 @@ impl App {
         }
     }
 
-    /// Shows a library change everywhere and saves it soon.
     pub fn apply(self: &Rc<Self>, change: Change) {
         if !change.needs_save() {
             return;
@@ -184,7 +173,6 @@ impl App {
         self.tray.render(
             &self.library.borrow(),
             Notices {
-                // With no capture there is nothing to pause, and three notices do not fit.
                 paused: prefs.capture_paused && !self.capture_notice.get(),
                 needs_paste_permission: prefs.paste_directly
                     && self.paste_status.get() == PasteStatus::NeedsPermission,
@@ -257,11 +245,9 @@ impl App {
         self.apply(change);
     }
 
-    /// Returns the error text when the desktop refused. The preference keeps the real state.
     pub fn set_launch_at_login(self: &Rc<Self>, on: bool) -> Result<(), String> {
         let result = self.services.set_launch_at_login(on);
-        let real = self.services.launch_at_login();
-        self.change_prefs(|prefs| prefs.launch_at_login = real);
+        self.refresh_settings();
         result
     }
 
@@ -303,7 +289,6 @@ impl App {
         }
     }
 
-    /// Spec 7.6.
     pub fn confirm_clear_history(self: &Rc<Self>) {
         self.hide_tray(None);
         let dialog = gtk::AlertDialog::builder()

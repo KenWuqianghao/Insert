@@ -1,5 +1,3 @@
-//! What the tray does: show and hide, keys, clicks, menus, paste, delete, naming.
-
 use std::collections::HashSet;
 use std::rc::Rc;
 use std::time::Duration;
@@ -44,8 +42,6 @@ impl App {
         self.tray.present(activation_token);
     }
 
-    /// Hides the tray with the animation. `then` runs when the tray is gone, also when a hide
-    /// is already running.
     pub fn hide_tray(self: &Rc<Self>, then: Option<Activation>) {
         if self.tray.model.borrow().state == TrayState::Hidden {
             if let Some(then) = then {
@@ -91,7 +87,6 @@ impl App {
         }
     }
 
-    /// Returns true when the key ran a tray command. Else the key goes to the focused field.
     pub fn handle_key(self: &Rc<Self>, key: Key, modifiers: Modifiers) -> bool {
         let command = {
             let model = self.tray.model.borrow();
@@ -187,7 +182,6 @@ impl App {
         self.tray.focus_field();
     }
 
-    /// Spec 5.1. The clipboard is set before the tray hides, while Insert still has focus.
     pub fn activate(self: &Rc<Self>, id: ClipId, action: PasteAction) {
         let payload = self.library.borrow().payload(id);
         let Ok(payload) = payload else {
@@ -225,7 +219,6 @@ impl App {
         }
     }
 
-    /// Spec 4.5. The selection moves first, the cards animate out, then the clips go.
     fn delete(self: &Rc<Self>, ids: HashSet<ClipId>) {
         {
             let mut model = self.tray.model.borrow_mut();
@@ -501,7 +494,6 @@ impl App {
         self.tray.add_action(&color);
     }
 
-    /// Keeps the filter menu's radio mark in line with the model after a show reset.
     pub fn sync_kind_action(&self) {
         if let Some(action) = self.tray.action("kind") {
             let kind = self.tray.model.borrow().kind;

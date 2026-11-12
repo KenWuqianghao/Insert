@@ -1,7 +1,5 @@
-//! The app of the active window, from a KWin script that reports each window activation over D-Bus.
-//!
-//! The same script gives the tray window its role. A Wayland client cannot ask for these properties, and
-//! Plasma sends no activation token with a global shortcut, so KWin must set them.
+//! A Wayland client cannot give its own window the tray role, and Plasma sends no activation token with a
+//! global shortcut, so KWin must set them.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -45,7 +43,6 @@ const TERMINAL_APP_IDS: &[&str] = &[
     "terminator",
 ];
 
-/// The app of the active window.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActiveApp {
     /// `id` is the desktop file id of the window when KWin knows it, else the window class.
@@ -55,7 +52,6 @@ pub struct ActiveApp {
     pub is_terminal: bool,
 }
 
-/// What Insert reads from the desktop file of an app.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct DesktopEntry {
     name: Option<String>,
@@ -70,7 +66,6 @@ pub enum ActiveAppError {
 
 #[derive(Default)]
 struct Focus {
-    /// The app of the last active window that is not a window of Insert.
     app: Option<ActiveApp>,
     insert_is_active: bool,
 }
@@ -160,7 +155,6 @@ impl Receiver {
         let fallback = if resource_class.is_empty() { id.clone() } else { resource_class };
         let source = SourceApp { name: entry.name.unwrap_or(fallback), id };
         self.focus.lock().expect("the lock is not poisoned").app = Some(ActiveApp { source, is_terminal });
-        // A full channel already has a wake-up in it.
         let _ = self.activated.try_send(());
     }
 }
@@ -179,8 +173,6 @@ async fn unload(connection: &zbus::Connection) -> Result<(), ActiveAppError> {
     scripting_call(connection, "unloadScript", &(SCRIPT_NAME,)).await.map(|_| ())
 }
 
-/// In the runtime directory, which only the user can write. A shared directory such as /tmp lets
-/// another user put a script there for KWin to run.
 fn script_file() -> Result<PathBuf, ActiveAppError> {
     std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)

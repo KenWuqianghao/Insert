@@ -1,5 +1,3 @@
-//! Shows the tray icon and prints menu events. The pause item changes the icon state.
-
 use insert_platform::tray_icon::{TrayEvent, TrayIcon};
 
 fn main() {

@@ -1,5 +1,3 @@
-//! Domain logic for Insert on Linux. No GTK, no D-Bus, no Wayland.
-
 pub mod capture;
 pub mod format;
 pub mod keys;

@@ -2,19 +2,15 @@ use std::collections::HashSet;
 
 use insert_core::{ClipId, ClipKind, Library, NameTarget, PasteAction, Scope, Selection, TrayMode};
 
-/// The tray's life cycle. Hidden and Hiding take no keys.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TrayState {
     Hidden,
     Browsing,
     Previewing,
     Naming(NameTarget),
-    /// `then` runs when the hide ends. A show during the hide drops it.
     Hiding { then: Option<Activation> },
 }
 
-/// A clip that the user chose. When the tray is gone, the clip moves to the front, and the paste
-/// keys go out if the clipboard has the clip (`copied`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Activation {
     pub id: ClipId,
@@ -25,17 +21,13 @@ pub struct Activation {
 #[derive(Debug)]
 pub struct TrayModel {
     pub state: TrayState,
-    /// Kept across opens, not across restarts.
     pub scope: Scope,
     pub kind: Option<ClipKind>,
     pub query: String,
     pub selection: Selection,
     pub ctrl_held: bool,
-    /// Clips that play the delete animation now. A second delete waits for it.
     pub deleting: HashSet<ClipId>,
-    /// The clips that the open card menu acts on.
     pub menu_targets: HashSet<ClipId>,
-    /// The visible ids that the strip shows now.
     pub visible: Vec<ClipId>,
 }
 
@@ -61,7 +53,6 @@ impl TrayModel {
         )
     }
 
-    /// The mode for the key table, or `None` when the tray takes no keys.
     pub fn key_mode(&self) -> Option<TrayMode> {
         match self.state {
             TrayState::Browsing => Some(TrayMode::Browsing),
@@ -79,14 +70,12 @@ impl TrayModel {
             .collect()
     }
 
-    /// After a scope, query, or filter change: select the first visible clip.
     pub fn reset_selection(&mut self, library: &Library) {
         self.visible = self.compute_visible(library);
         self.selection = Selection::only(self.visible.first().copied());
         self.leave_preview_if_empty();
     }
 
-    /// After a library change: keep what survives.
     pub fn reconcile(&mut self, library: &Library) {
         self.scope = library.resolve_scope(self.scope);
         self.visible = self.compute_visible(library);
@@ -102,8 +91,6 @@ impl TrayModel {
         self.reset_selection(library);
     }
 
-    /// Starts a hide of a shown tray. Returns false when a hide runs already; that hide takes
-    /// `then` if it is not `None`. A hidden tray must not call this.
     pub fn begin_hide(&mut self, then: Option<Activation>) -> bool {
         match &mut self.state {
             TrayState::Hiding { then: pending } => {
@@ -119,7 +106,6 @@ impl TrayModel {
         }
     }
 
-    /// Ends a running hide. Returns the activation to finish, if any.
     pub fn did_hide(&mut self) -> Option<Activation> {
         self.ctrl_held = false;
         match std::mem::replace(&mut self.state, TrayState::Hidden) {

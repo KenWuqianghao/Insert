@@ -1,6 +1,3 @@
-//! Actions that drive the app in the nested-KWin tests. Only a build with the `test-hooks`
-//! feature has them, and only with INSERT_TEST_HOOKS=1.
-
 use std::rc::Rc;
 
 use gtk4 as gtk;
@@ -11,9 +8,6 @@ use crate::app::App;
 use crate::services::ServiceEvent;
 use crate::{tray, with_app};
 
-/// `test-key` feeds the tray key path, `test-capture` the capture pipeline, and `test-action`
-/// runs a window action such as "tray.new-pinboard" or "settings.pane|privacy", or "clip-menu"
-/// and "filter-menu" to open those menus.
 pub fn install(app: &Rc<App>) {
     let weak = Rc::downgrade(app);
     let key = gio::SimpleAction::new("test-key", Some(glib::VariantTy::STRING));
