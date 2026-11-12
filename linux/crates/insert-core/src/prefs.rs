@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 
 use crate::format::format_count;
 use crate::model::{app_id_key, SourceApp};
-use crate::storage::write_atomic;
+use crate::storage::write_private_atomic;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum HistoryLimit {
@@ -75,7 +75,7 @@ impl Preferences {
     }
 
     pub fn save(&self, path: &Path) -> io::Result<()> {
-        write_atomic(path, &self.to_json())
+        write_private_atomic(path, &self.to_json())
     }
 
     pub fn from_json(bytes: &[u8]) -> Self {

@@ -139,7 +139,7 @@ impl Storage {
 
     pub fn save_index(&self, clips: &[Clip], pinboards: &[Pinboard]) -> io::Result<()> {
         let json = serde_json::to_vec(&IndexRef { clips, pinboards })?;
-        write_atomic(&self.index_path(), &json)
+        write_private_atomic(&self.index_path(), &json)
     }
 
     /// Writes the payload directory and the thumbnail. On failure, nothing is left behind.
@@ -180,7 +180,7 @@ impl Storage {
         }
         fs::rename(&partial, &final_dir)?;
         if let Some(png) = thumbnail_png {
-            write_atomic(&self.thumbnail_path(id), png)?;
+            write_private_atomic(&self.thumbnail_path(id), png)?;
         }
         Ok(())
     }
@@ -235,7 +235,7 @@ impl Storage {
 
 /// Writes a private temp file next to `path`, flushes it, and renames it over `path`. The
 /// directory of `path` becomes private too.
-pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+pub fn write_private_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let dir = path
         .parent()
         .ok_or_else(|| io::Error::other("path has no parent"))?;

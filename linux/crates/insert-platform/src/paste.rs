@@ -1,10 +1,10 @@
 use std::fs;
 use std::io;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 use ashpd::desktop::remote_desktop::{DeviceType, KeyState, RemoteDesktop, SelectDevicesOptions};
 use ashpd::desktop::{PersistMode, ResponseError, Session};
+use insert_core::storage::write_private_atomic;
 
 use crate::active_app::ActiveApp;
 use crate::portal;
@@ -130,21 +130,12 @@ fn unavailable(error: ashpd::Error) -> PasteError {
 
 fn store_token(path: &Path, token: Option<&str>) {
     let stored = match token {
-        Some(token) => write_private(path, token),
+        Some(token) => write_private_atomic(path, token.as_bytes()),
         None => remove_if_present(path),
     };
     if let Err(error) = stored {
         log::warn!("cannot store the portal restore token at {}: {error}", path.display());
     }
-}
-
-fn write_private(path: &Path, content: &str) -> io::Result<()> {
-    use std::io::Write as _;
-    fs::create_dir_all(path.parent().expect("the token file has a parent"))?;
-    let temp = path.with_extension("tmp");
-    let mut file = fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&temp)?;
-    file.write_all(content.as_bytes())?;
-    fs::rename(&temp, path)
 }
 
 fn remove_if_present(path: &Path) -> io::Result<()> {
