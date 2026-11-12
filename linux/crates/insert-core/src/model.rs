@@ -70,6 +70,20 @@ pub struct PixelSize {
     pub height: u32,
 }
 
+/// Insert decodes only images within these limits. A small file can declare a size that needs
+/// gigabytes of memory to decode.
+pub const MAX_DECODED_SIDE: u32 = 16_384;
+pub const MAX_DECODED_BYTES: u64 = 512 * 1024 * 1024;
+
+impl PixelSize {
+    /// True if Insert can decode an image of this size at 4 bytes per pixel.
+    pub fn can_decode(self) -> bool {
+        self.width <= MAX_DECODED_SIDE
+            && self.height <= MAX_DECODED_SIDE
+            && u64::from(self.width) * u64::from(self.height) * 4 <= MAX_DECODED_BYTES
+    }
+}
+
 /// sRGB channels in 0...1.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ColorValue {
@@ -637,10 +651,10 @@ mod tests {
         assert_eq!(PinboardColor::Blue.rgb(false).to_hex(), "#007AFF");
         assert_eq!(PinboardColor::Blue.rgb(true).to_hex(), "#0A84FF");
     }
-}
 
     #[test]
     fn app_id_keys_ignore_letter_case() {
         assert_eq!(app_id_key("org.keepassxc.KeePassXC"), app_id_key("org.keepassxc.keepassxc"));
         assert_ne!(app_id_key("com.bitwarden.desktop"), app_id_key("com.bitwarden"));
     }
+}

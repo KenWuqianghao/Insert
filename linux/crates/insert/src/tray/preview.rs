@@ -54,8 +54,11 @@ fn content_for(clip: &Clip, library: &Library) -> gtk::Widget {
         ClipContent::Text(snippet) | ClipContent::RichText(snippet) => {
             text_view(&full_text(clip, snippet, library))
         }
-        ClipContent::Image(_) => {
-            let picture = image_texture(clip, library)
+        ClipContent::Image(size) => {
+            let picture = size
+                .can_decode()
+                .then(|| image_texture(clip, library))
+                .flatten()
                 .map(|texture| gtk::Picture::for_paintable(&texture))
                 .unwrap_or_else(|| gtk::Picture::for_filename(library.thumbnail_path(clip.id)));
             picture.set_content_fit(gtk::ContentFit::Contain);

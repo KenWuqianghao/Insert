@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use image::{DynamicImage, ImageDecoder, ImageReader};
+use image::{DynamicImage, ImageDecoder, ImageReader, Limits};
 use sha2::{Digest, Sha256};
 
 use crate::mime::{
@@ -8,7 +8,10 @@ use crate::mime::{
     text_source, MimeMap, TextEncoding, COLOR, GNOME_COPIED_FILES, HTML, KDE_PASSWORD_HINT, PDF,
     UTF8_TEXT,
 };
-use crate::model::{ClipContent, ColorValue, ContentHash, PixelSize, TextSnippet};
+use crate::model::{
+    ClipContent, ColorValue, ContentHash, PixelSize, TextSnippet, MAX_DECODED_BYTES,
+    MAX_DECODED_SIDE,
+};
 
 pub const MAX_CAPTURE_BYTES: u64 = 50 * 1024 * 1024;
 pub const THUMBNAIL_MAX_SIDE: u32 = 560;
@@ -148,8 +151,11 @@ fn classify_payload(payload: &MimeMap) -> Result<(ClipContent, Option<Vec<u8>>),
     if !files.is_empty() {
         return Ok((ClipContent::Files(files), None));
     }
-    if let Some((size, png)) = payload.image().and_then(thumbnail) {
-        return Ok((ClipContent::Image(size), Some(png)));
+    if let Some(data) = payload.image() {
+        if let Some(size) = image_size(data) {
+            let png = size.can_decode().then(|| thumbnail(data)).flatten();
+            return Ok((ClipContent::Image(size), png));
+        }
     }
     if let Some((url, title)) = payload.url_and_title() {
         return Ok((ClipContent::Link { url, title }, None));
@@ -211,15 +217,30 @@ fn classify_payload(payload: &MimeMap) -> Result<(ClipContent, Option<Vec<u8>>),
     }
 }
 
-/// The original pixel size and a PNG with its longest side at most `THUMBNAIL_MAX_SIDE`.
-fn thumbnail(data: &[u8]) -> Option<(PixelSize, Vec<u8>)> {
-    let mut decoder = ImageReader::new(Cursor::new(data))
+fn image_reader(data: &[u8]) -> Option<ImageReader<Cursor<&[u8]>>> {
+    ImageReader::new(Cursor::new(data))
         .with_guessed_format()
-        .ok()?
-        .into_decoder()
-        .ok()?;
-    let (width, height) = decoder.dimensions();
-    if width == 0 || height == 0 {
+        .ok()
+}
+
+/// The pixel size from the image header. `None` if the data is not an image that Insert reads.
+fn image_size(data: &[u8]) -> Option<PixelSize> {
+    let (width, height) = image_reader(data)?.into_dimensions().ok()?;
+    (width > 0 && height > 0).then_some(PixelSize { width, height })
+}
+
+/// A PNG with its longest side at most `THUMBNAIL_MAX_SIDE`. `None` if the image does not decode
+/// within the decode limits.
+fn thumbnail(data: &[u8]) -> Option<Vec<u8>> {
+    let mut limits = Limits::default();
+    limits.max_image_width = Some(MAX_DECODED_SIDE);
+    limits.max_image_height = Some(MAX_DECODED_SIDE);
+    limits.max_alloc = Some(MAX_DECODED_BYTES);
+    let mut reader = image_reader(data)?;
+    reader.limits(limits);
+    let mut decoder = reader.into_decoder().ok()?;
+    // The decoder allocates its output buffer without a check against `max_alloc`.
+    if decoder.total_bytes() > MAX_DECODED_BYTES {
         return None;
     }
     let orientation = decoder.orientation().ok();
@@ -238,7 +259,7 @@ fn thumbnail(data: &[u8]) -> Option<(PixelSize, Vec<u8>)> {
     image
         .write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png)
         .ok()?;
-    Some((PixelSize { width, height }, png))
+    Some(png)
 }
 
 /// GTK writes `application/x-color` as four u16 values: red, green, blue, alpha.
@@ -562,6 +583,46 @@ mod tests {
         let capture = classify(offer(&[("image/png", &png(40, 30))])).unwrap();
         let thumbnail = image::load_from_memory(&capture.thumbnail_png.unwrap()).unwrap();
         assert_eq!((thumbnail.width(), thumbnail.height()), (40, 30));
+    }
+
+    /// A PNG header that declares `width` x `height` RGBA pixels, with no pixel data.
+    fn png_header(width: u32, height: u32) -> Vec<u8> {
+        fn crc32(bytes: &[u8]) -> u32 {
+            let mut crc = !0u32;
+            for byte in bytes {
+                crc ^= u32::from(*byte);
+                for _ in 0..8 {
+                    crc = if crc & 1 == 1 { (crc >> 1) ^ 0xEDB8_8320 } else { crc >> 1 };
+                }
+            }
+            !crc
+        }
+        let chunk = |kind: &[u8], body: &[u8]| {
+            let typed = [kind, body].concat();
+            [&(body.len() as u32).to_be_bytes()[..], &typed, &crc32(&typed).to_be_bytes()].concat()
+        };
+        let ihdr = [&width.to_be_bytes()[..], &height.to_be_bytes(), &[8, 6, 0, 0, 0]].concat();
+        [
+            &b"\x89PNG\r\n\x1a\n"[..],
+            &chunk(b"IHDR", &ihdr),
+            &chunk(b"IDAT", &[]),
+            &chunk(b"IEND", &[]),
+        ]
+        .concat()
+    }
+
+    #[test]
+    fn image_too_large_to_decode_is_stored_with_no_thumbnail() {
+        let capture = classify(offer(&[("image/png", &png_header(40_000, 40_000))])).unwrap();
+        assert_eq!(
+            capture.content,
+            ClipContent::Image(PixelSize {
+                width: 40_000,
+                height: 40_000
+            })
+        );
+        assert_eq!(capture.thumbnail_png, None);
+        assert_eq!(capture.payload.mimes().collect::<Vec<_>>(), ["image/png"]);
     }
 
     #[test]
