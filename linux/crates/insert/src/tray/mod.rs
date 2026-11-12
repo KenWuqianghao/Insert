@@ -385,8 +385,9 @@ impl Tray {
 
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
-        keys.connect_key_pressed(with_app!(app => app or glib::Propagation::Proceed, |_, keyval, _, state| {
-            match keys::translate(keyval, state) {
+        keys.connect_key_pressed(with_app!(app => app or glib::Propagation::Proceed, |_, keyval, keycode, state| {
+            let display = WidgetExt::display(&app.tray.window);
+            match keys::translate(keyval, state, || keys::first_layout_chars(&display, keycode)) {
                 Some((key, mods)) if app.handle_key(key, mods) => glib::Propagation::Stop,
                 _ => glib::Propagation::Proceed,
             }
