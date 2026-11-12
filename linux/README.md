@@ -34,6 +34,7 @@ To remove Insert, run `./install.sh --uninstall`. Your clips and your settings s
 | Paste as plain text | `Shift+Return` |
 | Paste card 1 to 9 | `Ctrl+1` to `Ctrl+9` |
 | Preview | `Space` |
+| Open the menu of the selected clip | `Menu` or `Shift+F10` |
 | Go to the next pinboard | `Tab` |
 | Search | Type in the tray |
 | Close | `Esc` |

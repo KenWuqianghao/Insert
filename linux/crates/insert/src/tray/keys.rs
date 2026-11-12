@@ -25,6 +25,8 @@ pub fn translate(
         gdk::Key::BackSpace => Key::Backspace,
         gdk::Key::Delete | gdk::Key::KP_Delete => Key::Delete,
         gdk::Key::space | gdk::Key::KP_Space => Key::Space,
+        gdk::Key::Menu => Key::Menu,
+        gdk::Key::F10 => Key::F10,
         other => {
             let typed = other.to_lower().to_unicode().filter(|c| !c.is_control())?;
             match modifiers.ctrl {
@@ -100,6 +102,8 @@ pub fn parse_test_key(spec: &str) -> Option<(Key, Modifiers)> {
         "backspace" => Key::Backspace,
         "delete" => Key::Delete,
         "space" => Key::Space,
+        "menu" => Key::Menu,
+        "f10" => Key::F10,
         _ => {
             let mut chars = name.chars();
             let c = chars.next()?;

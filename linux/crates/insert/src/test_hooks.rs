@@ -57,13 +57,6 @@ pub fn install(app: &Rc<App>) {
     let action = gio::SimpleAction::new("test-action", Some(glib::VariantTy::STRING));
     action.connect_activate(with_app!(&weak => app, |_, param| {
         let Some(spec) = param.and_then(|p| p.str()) else { return };
-        if spec == "clip-menu" {
-            let primary = app.tray.model.borrow().selection.primary();
-            if let Some((id, card)) = primary.and_then(|id| Some((id, app.tray.card_widget(id)?))) {
-                app.open_clip_menu(id, card.upcast_ref(), 120.0, 120.0);
-            }
-            return;
-        }
         if spec == "filter-menu" {
             app.tray.popup_filter_menu();
             return;

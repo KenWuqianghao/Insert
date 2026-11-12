@@ -162,6 +162,13 @@ impl App {
                 self.set_scope(scope);
             }
             PanelCommand::OpenSettings => self.open_settings(),
+            PanelCommand::OpenClipMenu => {
+                let primary = self.tray.model.borrow().selection.primary();
+                if let Some((id, card)) = primary.and_then(|id| Some((id, self.tray.card_widget(id)?))) {
+                    let (x, y) = (f64::from(card.width()) / 2.0, f64::from(card.height()) / 2.0);
+                    self.open_clip_menu(id, card.upcast_ref(), x, y);
+                }
+            }
             PanelCommand::Hide => self.hide_tray(None),
         }
     }

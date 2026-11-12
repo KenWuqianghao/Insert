@@ -12,6 +12,8 @@ pub enum Key {
     Backspace,
     Delete,
     Space,
+    Menu,
+    F10,
     /// The key's character without Shift, for example `'q'`, `'1'`, `','`, `'['`.
     Char(char),
 }
@@ -74,6 +76,7 @@ pub enum PanelCommand {
     Cancel,
     SwitchScope(isize),
     OpenSettings,
+    OpenClipMenu,
     Hide,
 }
 
@@ -168,6 +171,8 @@ const BINDINGS: &[Binding] = &[
     bind(Backspace, NONE, QueryEmpty, DeleteSelection),
     bind(Delete, NONE, QueryEmpty, DeleteSelection),
     bind(Space, NONE, QueryEmptyOrPreviewing, TogglePreview),
+    bind(Menu, NONE, NotNaming, OpenClipMenu),
+    bind(F10, SHIFT, NotNaming, OpenClipMenu),
 ];
 
 /// The tray command for a key press, or `None` if the key goes to the focused text field.
@@ -348,6 +353,17 @@ mod tests {
         assert_eq!(run(Space, NONE, PREVIEWING), Some(TogglePreview));
         assert_eq!(run(Space, NONE, SEARCHING), None);
         assert_eq!(run(Space, SHIFT, BROWSING), None);
+    }
+
+    #[test]
+    fn menu_and_shift_f10_open_the_clip_menu() {
+        for context in [BROWSING, SEARCHING, PREVIEWING] {
+            assert_eq!(run(Menu, NONE, context), Some(OpenClipMenu));
+            assert_eq!(run(F10, SHIFT, context), Some(OpenClipMenu));
+        }
+        assert_eq!(run(F10, NONE, BROWSING), None);
+        assert_eq!(run(Menu, NONE, NAMING), None);
+        assert_eq!(run(F10, SHIFT, NAMING), None);
     }
 
     #[test]
