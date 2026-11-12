@@ -14,7 +14,7 @@ use time::OffsetDateTime;
 
 use super::card::Card;
 use super::menus;
-use super::model::TrayState;
+use super::model::{Activation, TrayState};
 use crate::app::App;
 use crate::services::PasteStatus;
 use crate::with_app;
@@ -46,18 +46,16 @@ impl App {
 
     /// Hides the tray with the animation. `then` runs when the tray is gone, also when a hide
     /// is already running.
-    pub fn hide_tray(self: &Rc<Self>, then: Option<Box<dyn FnOnce()>>) {
-        if let Some(then) = then {
-            self.tray.queue_after_hide(then);
-        }
-        let state = self.tray.model.borrow().state.clone();
-        match state {
-            TrayState::Hiding => {}
-            TrayState::Hidden => self.run_after_hide(),
-            TrayState::Browsing | TrayState::Previewing | TrayState::Naming(_) => {
-                self.tray.model.borrow_mut().state = TrayState::Hiding;
-                self.tray.start_hide();
+    pub fn hide_tray(self: &Rc<Self>, then: Option<Activation>) {
+        if self.tray.model.borrow().state == TrayState::Hidden {
+            if let Some(then) = then {
+                self.finish_activation(then);
             }
+            return;
+        }
+        let start = self.tray.model.borrow_mut().begin_hide(then);
+        if start {
+            self.tray.start_hide();
         }
     }
 
@@ -71,17 +69,13 @@ impl App {
     }
 
     pub fn finish_hide(self: &Rc<Self>) {
-        if self.tray.model.borrow().state != TrayState::Hiding {
+        if !matches!(self.tray.model.borrow().state, TrayState::Hiding { .. }) {
             return;
         }
         self.tray.window.set_visible(false);
-        self.tray.model.borrow_mut().did_hide();
-        self.run_after_hide();
-    }
-
-    fn run_after_hide(&self) {
-        for then in self.tray.take_after_hide() {
-            then();
+        let then = self.tray.model.borrow_mut().did_hide();
+        if let Some(then) = then {
+            self.finish_activation(then);
         }
     }
 
@@ -209,22 +203,26 @@ impl App {
         if let Err(error) = &copied {
             eprintln!("insert: cannot set the clipboard: {error}");
         }
-        let app = Rc::downgrade(self);
-        self.hide_tray(Some(Box::new(move || {
-            let Some(app) = app.upgrade() else { return };
-            let change = app
-                .library
-                .borrow_mut()
-                .move_to_front(id, OffsetDateTime::now_utc());
-            app.apply(change);
-            let paste = copied.is_ok()
-                && action != PasteAction::Copy
-                && app.prefs.borrow().paste_directly
-                && app.services.paste_status() == PasteStatus::Ready;
-            if paste {
-                app.services.paste_into_front_app();
-            }
-        })));
+        self.hide_tray(Some(Activation {
+            id,
+            action,
+            copied: copied.is_ok(),
+        }));
+    }
+
+    fn finish_activation(self: &Rc<Self>, activation: Activation) {
+        let change = self
+            .library
+            .borrow_mut()
+            .move_to_front(activation.id, OffsetDateTime::now_utc());
+        self.apply(change);
+        let paste = activation.copied
+            && activation.action != PasteAction::Copy
+            && self.prefs.borrow().paste_directly
+            && self.services.paste_status() == PasteStatus::Ready;
+        if paste {
+            self.services.paste_into_front_app();
+        }
     }
 
     /// Spec 4.5. The selection moves first, the cards animate out, then the clips go.

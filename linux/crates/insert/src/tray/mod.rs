@@ -99,7 +99,6 @@ pub struct Tray {
     cards: RefCell<HashMap<ClipId, Card>>,
     /// The list row that shows each bound card now.
     bound: RefCell<HashMap<ClipId, glib::WeakRef<gtk::ListItem>>>,
-    after_hide: RefCell<Vec<Box<dyn FnOnce()>>>,
     /// New clips that play the insert animation when their card is bound.
     appearing: RefCell<HashSet<ClipId>>,
     actions: gio::SimpleActionGroup,
@@ -349,7 +348,6 @@ impl Tray {
             prompt_entry,
             cards: RefCell::new(HashMap::new()),
             bound: RefCell::new(HashMap::new()),
-            after_hide: RefCell::new(Vec::new()),
             appearing: RefCell::new(HashSet::new()),
             actions: gio::SimpleActionGroup::new(),
             menu_pinboard: Cell::new(None),
@@ -453,14 +451,6 @@ impl Tray {
         self.panel.remove_css_class("shown");
         self.revealer.set_transition_duration(HIDE_MS);
         self.revealer.set_reveal_child(false);
-    }
-
-    pub fn queue_after_hide(&self, then: Box<dyn FnOnce()>) {
-        self.after_hide.borrow_mut().push(then);
-    }
-
-    pub fn take_after_hide(&self) -> Vec<Box<dyn FnOnce()>> {
-        std::mem::take(&mut *self.after_hide.borrow_mut())
     }
 
     pub fn focus_field(&self) {

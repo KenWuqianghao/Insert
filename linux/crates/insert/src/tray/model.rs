@@ -1,16 +1,25 @@
 use std::collections::HashSet;
 
-use insert_core::{ClipId, ClipKind, Library, NameTarget, Scope, Selection, TrayMode};
+use insert_core::{ClipId, ClipKind, Library, NameTarget, PasteAction, Scope, Selection, TrayMode};
 
-/// The tray's life cycle. Hidden and Hiding take no keys. A paste that starts while Hiding still
-/// runs when the hide ends.
+/// The tray's life cycle. Hidden and Hiding take no keys.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TrayState {
     Hidden,
     Browsing,
     Previewing,
     Naming(NameTarget),
-    Hiding,
+    /// `then` runs when the hide ends. A show during the hide drops it.
+    Hiding { then: Option<Activation> },
+}
+
+/// A clip that the user chose. When the tray is gone, the clip moves to the front, and the paste
+/// keys go out if the clipboard has the clip (`copied`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Activation {
+    pub id: ClipId,
+    pub action: PasteAction,
+    pub copied: bool,
 }
 
 #[derive(Debug)]
@@ -58,7 +67,7 @@ impl TrayModel {
             TrayState::Browsing => Some(TrayMode::Browsing),
             TrayState::Previewing => Some(TrayMode::Previewing),
             TrayState::Naming(_) => Some(TrayMode::Naming),
-            TrayState::Hidden | TrayState::Hiding => None,
+            TrayState::Hidden | TrayState::Hiding { .. } => None,
         }
     }
 
@@ -93,9 +102,30 @@ impl TrayModel {
         self.reset_selection(library);
     }
 
-    pub fn did_hide(&mut self) {
-        self.state = TrayState::Hidden;
+    /// Starts a hide of a shown tray. Returns false when a hide runs already; that hide takes
+    /// `then` if it is not `None`. A hidden tray must not call this.
+    pub fn begin_hide(&mut self, then: Option<Activation>) -> bool {
+        match &mut self.state {
+            TrayState::Hiding { then: pending } => {
+                if then.is_some() {
+                    *pending = then;
+                }
+                false
+            }
+            _ => {
+                self.state = TrayState::Hiding { then };
+                true
+            }
+        }
+    }
+
+    /// Ends a running hide. Returns the activation to finish, if any.
+    pub fn did_hide(&mut self) -> Option<Activation> {
         self.ctrl_held = false;
+        match std::mem::replace(&mut self.state, TrayState::Hidden) {
+            TrayState::Hiding { then } => then,
+            _ => None,
+        }
     }
 
     fn leave_preview_if_empty(&mut self) {
@@ -150,9 +180,40 @@ mod tests {
     fn hidden_and_hiding_take_no_keys() {
         let mut model = TrayModel::new();
         assert_eq!(model.key_mode(), None);
-        model.state = TrayState::Hiding;
+        model.state = TrayState::Hiding { then: None };
         assert_eq!(model.key_mode(), None);
         model.state = TrayState::Naming(NameTarget::NewPinboard { pinning: HashSet::new() });
         assert_eq!(model.key_mode(), Some(TrayMode::Naming));
+    }
+
+    fn activation(library: &Library) -> Activation {
+        Activation {
+            id: library.visible(Scope::History, None, "")[0].id,
+            action: PasteAction::Paste,
+            copied: true,
+        }
+    }
+
+    #[test]
+    fn a_hide_finishes_the_activation_that_started_it() {
+        let (_dir, library) = library_with(&["one"]);
+        let mut model = TrayModel::new();
+        model.prepare_show(&library);
+        let paste = activation(&library);
+        assert!(model.begin_hide(Some(paste)));
+        assert!(!model.begin_hide(None));
+        assert_eq!(model.did_hide(), Some(paste));
+        assert_eq!(model.state, TrayState::Hidden);
+    }
+
+    #[test]
+    fn a_show_during_the_hide_drops_the_pending_paste() {
+        let (_dir, library) = library_with(&["one"]);
+        let mut model = TrayModel::new();
+        model.prepare_show(&library);
+        assert!(model.begin_hide(Some(activation(&library))));
+        model.prepare_show(&library);
+        assert!(model.begin_hide(None));
+        assert_eq!(model.did_hide(), None);
     }
 }
