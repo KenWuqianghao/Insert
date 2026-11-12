@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use insert_core::{app_id_key, SourceApp};
+
 use crate::APP_ID;
 
 const KWIN_SERVICE: &str = "org.kde.KWin";
@@ -17,12 +19,47 @@ const SCRIPT_NAME: &str = "insert-active-app";
 const RECEIVER_PATH: &str = "/io/github/kenwuqianghao/Insert/ActiveApp";
 const RECEIVER_INTERFACE: &str = "io.github.kenwuqianghao.Insert.ActiveApp";
 
+/// Terminals with no `TerminalEmulator` category in their desktop file, or with no desktop file.
+const TERMINAL_APP_IDS: &[&str] = &[
+    "konsole",
+    "org.kde.konsole",
+    "yakuake",
+    "org.kde.yakuake",
+    "gnome-terminal",
+    "gnome-terminal-server",
+    "org.gnome.terminal",
+    "org.gnome.console",
+    "kgx",
+    "org.gnome.ptyxis",
+    "kitty",
+    "alacritty",
+    "foot",
+    "footclient",
+    "wezterm",
+    "org.wezfurlong.wezterm",
+    "ghostty",
+    "com.mitchellh.ghostty",
+    "xterm",
+    "tilix",
+    "com.gexperts.tilix",
+    "terminator",
+];
+
+/// The app of the active window.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SourceApp {
-    /// The desktop file id of the window when KWin knows it, else the window class.
-    pub id: String,
-    /// `Name` from the desktop file, else the window class.
-    pub name: String,
+pub struct ActiveApp {
+    /// `id` is the desktop file id of the window when KWin knows it, else the window class.
+    /// `name` is `Name` from the desktop file, else the window class.
+    pub source: SourceApp,
+    /// Terminals use Ctrl+V for a control character.
+    pub is_terminal: bool,
+}
+
+/// What Insert reads from the desktop file of an app.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct DesktopEntry {
+    name: Option<String>,
+    terminal_emulator: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -34,7 +71,7 @@ pub enum ActiveAppError {
 #[derive(Default)]
 struct Focus {
     /// The app of the last active window that is not a window of Insert.
-    app: Option<SourceApp>,
+    app: Option<ActiveApp>,
     insert_is_active: bool,
 }
 
@@ -54,7 +91,7 @@ impl ActiveAppTracker {
         let focus = Arc::new(Mutex::new(Focus::default()));
         let (activated, external_activations) = async_channel::bounded(1);
         let connection = zbus::Connection::session().await.map_err(unavailable)?;
-        let receiver = Receiver { focus: Arc::clone(&focus), activated, names: HashMap::new() };
+        let receiver = Receiver { focus: Arc::clone(&focus), activated, entries: HashMap::new() };
         connection.object_server().at(RECEIVER_PATH, receiver).await.map_err(unavailable)?;
 
         let unique_name = connection.unique_name().ok_or_else(|| unavailable("no D-Bus name"))?;
@@ -80,7 +117,7 @@ impl ActiveAppTracker {
 
     /// The app of the last active window that is not a window of Insert. `None` until KWin
     /// reports such a window.
-    pub fn current(&self) -> Option<SourceApp> {
+    pub fn current(&self) -> Option<ActiveApp> {
         self.focus.lock().expect("the lock is not poisoned").app.clone()
     }
 
@@ -101,7 +138,7 @@ impl ActiveAppTracker {
 struct Receiver {
     focus: Arc<Mutex<Focus>>,
     activated: async_channel::Sender<()>,
-    names: HashMap<String, Option<String>>,
+    entries: HashMap<String, DesktopEntry>,
 }
 
 #[zbus::interface(name = "io.github.kenwuqianghao.Insert.ActiveApp")]
@@ -118,10 +155,11 @@ impl Receiver {
         if insert_is_active {
             return;
         }
-        let name = self.names.entry(id.clone()).or_insert_with(|| desktop_entry_name(&id)).clone();
+        let entry = self.entries.entry(id.clone()).or_insert_with(|| desktop_entry(&id)).clone();
+        let is_terminal = entry.terminal_emulator || TERMINAL_APP_IDS.contains(&app_id_key(&id).as_str());
         let fallback = if resource_class.is_empty() { id.clone() } else { resource_class };
-        let app = SourceApp { name: name.unwrap_or(fallback), id };
-        self.focus.lock().expect("the lock is not poisoned").app = Some(app);
+        let source = SourceApp { name: entry.name.unwrap_or(fallback), id };
+        self.focus.lock().expect("the lock is not poisoned").app = Some(ActiveApp { source, is_terminal });
         // A full channel already has a wake-up in it.
         let _ = self.activated.try_send(());
     }
@@ -176,7 +214,7 @@ report(workspace.activeWindow);
     )
 }
 
-fn desktop_entry_name(id: &str) -> Option<String> {
+fn desktop_entry(id: &str) -> DesktopEntry {
     let data_home = std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")));
@@ -185,16 +223,22 @@ fn desktop_entry_name(id: &str) -> Option<String> {
         .into_iter()
         .chain(data_dirs.split(':').filter(|dir| !dir.is_empty()).map(PathBuf::from))
         .find_map(|dir| std::fs::read_to_string(dir.join("applications").join(format!("{id}.desktop"))).ok())
-        .and_then(|text| parse_desktop_entry_name(&text))
+        .map(|text| parse_desktop_entry(&text))
+        .unwrap_or_default()
 }
 
-fn parse_desktop_entry_name(text: &str) -> Option<String> {
-    text.lines()
+fn parse_desktop_entry(text: &str) -> DesktopEntry {
+    let group: Vec<&str> = text
+        .lines()
         .skip_while(|line| line.trim() != "[Desktop Entry]")
         .skip(1)
         .take_while(|line| !line.starts_with('['))
-        .find_map(|line| line.strip_prefix("Name=").map(|name| name.trim().to_owned()))
-        .filter(|name| !name.is_empty())
+        .collect();
+    let value = |key: &str| group.iter().find_map(|line| line.strip_prefix(key)?.strip_prefix('=')).map(str::trim);
+    DesktopEntry {
+        name: value("Name").filter(|name| !name.is_empty()).map(str::to_owned),
+        terminal_emulator: value("Categories").is_some_and(|categories| categories.split(';').any(|c| c == "TerminalEmulator")),
+    }
 }
 
 fn unavailable(error: impl std::fmt::Display) -> ActiveAppError {
@@ -206,20 +250,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_name_comes_from_the_desktop_entry_group() {
-        let text = "[Desktop Action new]\nName=New Window\n\n[Desktop Entry]\nGenericName=Text Editor\nName[de]=KSchreiben\nName=KWrite\nExec=kwrite\n\n[Desktop Action other]\nName=Other\n";
-        assert_eq!(parse_desktop_entry_name(text).as_deref(), Some("KWrite"));
-        assert_eq!(parse_desktop_entry_name("[Desktop Entry]\nExec=x\n"), None);
+    fn the_name_and_category_come_from_the_desktop_entry_group() {
+        let text = "[Desktop Action new]\nName=New Window\n\n[Desktop Entry]\nGenericName=Text Editor\nName[de]=KSchreiben\nName=KWrite\nExec=kwrite\nCategories=Qt;KDE;Utility;TextEditor;\n\n[Desktop Action other]\nName=Other\n";
+        assert_eq!(parse_desktop_entry(text), DesktopEntry { name: Some("KWrite".into()), terminal_emulator: false });
+        assert_eq!(parse_desktop_entry("[Desktop Entry]\nExec=x\n"), DesktopEntry::default());
+        let terminal = "[Desktop Entry]\nName=Rio\nCategories=System;TerminalEmulator;\n";
+        assert!(parse_desktop_entry(terminal).terminal_emulator);
+    }
+
+    #[test]
+    fn a_known_terminal_id_in_any_letter_case_is_a_terminal() {
+        let focus = Arc::new(Mutex::new(Focus::default()));
+        let (activated, _activations) = async_channel::bounded(1);
+        let mut receiver = Receiver { focus: Arc::clone(&focus), activated, entries: HashMap::new() };
+        let is_terminal = |receiver: &mut Receiver, id: &str| {
+            receiver.activated(id.into(), String::new());
+            focus.lock().unwrap().app.as_ref().unwrap().is_terminal
+        };
+        assert!(is_terminal(&mut receiver, "Alacritty"));
+        assert!(!is_terminal(&mut receiver, "zz.no.such.editor"));
     }
 
     #[test]
     fn a_window_of_insert_keeps_the_last_external_app() {
         let focus = Arc::new(Mutex::new(Focus::default()));
         let (activated, _activations) = async_channel::bounded(1);
-        let mut receiver = Receiver { focus: Arc::clone(&focus), activated, names: HashMap::new() };
+        let mut receiver = Receiver { focus: Arc::clone(&focus), activated, entries: HashMap::new() };
         let state = || {
             let focus = focus.lock().unwrap();
-            (focus.app.clone(), focus.insert_is_active)
+            (focus.app.as_ref().map(|app| app.source.clone()), focus.insert_is_active)
         };
         receiver.activated("zz.no.such.app".into(), "someclass".into());
         let external = Some(SourceApp { id: "zz.no.such.app".into(), name: "someclass".into() });
@@ -232,14 +291,14 @@ mod tests {
     fn no_active_window_is_not_an_external_window() {
         let focus = Arc::new(Mutex::new(Focus::default()));
         let (activated, activations) = async_channel::bounded(1);
-        let mut receiver = Receiver { focus: Arc::clone(&focus), activated, names: HashMap::new() };
+        let mut receiver = Receiver { focus: Arc::clone(&focus), activated, entries: HashMap::new() };
         receiver.activated("zz.no.such.app".into(), "someclass".into());
         receiver.activated(APP_ID.into(), "insert".into());
         let _ = activations.try_recv();
         receiver.activated(String::new(), String::new());
         let focus = focus.lock().unwrap();
         assert!(focus.insert_is_active);
-        assert_eq!(focus.app.as_ref().map(|app| app.id.as_str()), Some("zz.no.such.app"));
+        assert_eq!(focus.app.as_ref().map(|app| app.source.id.as_str()), Some("zz.no.such.app"));
         assert!(activations.try_recv().is_err(), "a wake-up for no window");
     }
 }

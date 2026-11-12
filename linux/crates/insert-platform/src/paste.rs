@@ -7,41 +7,16 @@ use std::path::PathBuf;
 
 use ashpd::desktop::remote_desktop::{DeviceType, KeyState, RemoteDesktop, SelectDevicesOptions};
 use ashpd::desktop::{PersistMode, ResponseError, Session};
-use insert_core::app_id_key;
 
+use crate::active_app::ActiveApp;
 use crate::portal;
 
 const KEYSYM_CONTROL_L: i32 = 0xffe3;
+const KEYSYM_CONTROL_R: i32 = 0xffe4;
 const KEYSYM_SHIFT_L: i32 = 0xffe1;
 const KEYSYM_SHIFT_R: i32 = 0xffe2;
 const KEYSYM_V: i32 = 0x0076;
 const KEYSYM_INSERT: i32 = 0xff63;
-
-/// Terminals use Ctrl+V for a control character.
-const TERMINAL_APP_IDS: &[&str] = &[
-    "konsole",
-    "org.kde.konsole",
-    "yakuake",
-    "org.kde.yakuake",
-    "gnome-terminal",
-    "gnome-terminal-server",
-    "org.gnome.terminal",
-    "org.gnome.console",
-    "kgx",
-    "org.gnome.ptyxis",
-    "kitty",
-    "alacritty",
-    "foot",
-    "footclient",
-    "wezterm",
-    "org.wezfurlong.wezterm",
-    "ghostty",
-    "com.mitchellh.ghostty",
-    "xterm",
-    "tilix",
-    "com.gexperts.tilix",
-    "terminator",
-];
 
 /// The keys that paste in the app that has the focus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,10 +29,9 @@ pub enum PasteKeys {
 }
 
 impl PasteKeys {
-    /// `app_id` is the desktop file id or the window class of the app.
-    pub fn for_app(app_id: Option<&str>) -> Self {
-        match app_id {
-            Some(id) if TERMINAL_APP_IDS.contains(&app_id_key(id).as_str()) => Self::ShiftInsert,
+    pub fn for_app(app: Option<&ActiveApp>) -> Self {
+        match app {
+            Some(app) if app.is_terminal => Self::ShiftInsert,
             _ => Self::CtrlV,
         }
     }
@@ -151,15 +125,17 @@ impl PasteInjector {
     pub async fn send_paste(&self, keys: PasteKeys) -> Result<(), PasteError> {
         let (modifier, key) = keys.keysyms();
         // The user can still hold Shift from Shift+Return. With it, Ctrl+V becomes Ctrl+Shift+V, the shortcut
-        // that opens Insert again.
-        let shift_release = [(KEYSYM_SHIFT_L, KeyState::Released), (KEYSYM_SHIFT_R, KeyState::Released)];
+        // that opens Insert again. The user can also still hold Ctrl from Ctrl+1, and Ctrl+Shift+Insert is not
+        // a paste in a terminal.
+        let release = [KEYSYM_SHIFT_L, KEYSYM_SHIFT_R, KEYSYM_CONTROL_L, KEYSYM_CONTROL_R]
+            .map(|keysym| (keysym, KeyState::Released));
         let paste = [
             (modifier, KeyState::Pressed),
             (key, KeyState::Pressed),
             (key, KeyState::Released),
             (modifier, KeyState::Released),
         ];
-        for (keysym, state) in shift_release.into_iter().chain(paste) {
+        for (keysym, state) in release.into_iter().chain(paste) {
             self.portal
                 .notify_keyboard_keysym(&self.session, keysym, state, Default::default())
                 .await
@@ -219,9 +195,12 @@ mod tests {
 
     #[test]
     fn a_terminal_gets_shift_insert() {
-        assert_eq!(PasteKeys::for_app(Some("org.kde.konsole")), PasteKeys::ShiftInsert);
-        assert_eq!(PasteKeys::for_app(Some("Alacritty")), PasteKeys::ShiftInsert);
-        assert_eq!(PasteKeys::for_app(Some("org.kde.kwrite")), PasteKeys::CtrlV);
+        let app = |is_terminal| ActiveApp {
+            source: insert_core::SourceApp { id: "x".into(), name: "x".into() },
+            is_terminal,
+        };
+        assert_eq!(PasteKeys::for_app(Some(&app(true))), PasteKeys::ShiftInsert);
+        assert_eq!(PasteKeys::for_app(Some(&app(false))), PasteKeys::CtrlV);
         assert_eq!(PasteKeys::for_app(None), PasteKeys::CtrlV);
     }
 }

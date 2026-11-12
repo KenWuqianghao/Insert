@@ -188,7 +188,7 @@ impl Services {
                     None
                 }
             };
-            let keys = PasteKeys::for_app(target.as_ref().map(|app| app.id.as_str()));
+            let keys = PasteKeys::for_app(target.as_ref());
             // A terminal that pastes the primary selection would paste old content.
             if keys == PasteKeys::ShiftInsert {
                 let mirrored = match &*inner.watcher.borrow() {
@@ -220,8 +220,7 @@ impl Services {
 
     /// The app in front, for the clip source and the ignored apps.
     pub fn source_app(&self) -> Option<SourceApp> {
-        let app = self.inner.active_app.borrow().as_ref()?.current()?;
-        Some(SourceApp { id: app.id, name: app.name })
+        Some(self.inner.active_app.borrow().as_ref()?.current()?.source)
     }
 
     /// False when the desktop does not tell Insert which app is in front.
