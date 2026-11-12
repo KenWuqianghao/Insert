@@ -157,6 +157,80 @@ Build it on Windows with the .NET 8 Windows Desktop workload installed:
 dotnet build windows/Insert.Windows.sln
 ```
 
+## Linux
+
+The Linux port is in [`linux/`](./linux). It is a Rust and GTK 4 app with the same tray, search, pinboards, and history model.
+
+### Requirements
+
+- KDE Plasma 6 on Wayland. This is the only desktop that is tested.
+- GTK 4.14 or later and glibc 2.39 or later, for the release build.
+- `podman`, to build from source. The build runs in a container, so the host needs no compiler.
+
+GNOME on Wayland has these limits:
+
+- Insert cannot watch the clipboard, because GNOME does not have the data-control protocol. The tray shows a notice, and Insert saves no clips.
+- Insert cannot ask for the keyboard focus. If the tray opens without the focus, click the tray.
+- Insert does not know which app is in front. Clips have no source app, and the ignored apps list does not work.
+
+X11 sessions are not tested.
+
+### Build and install
+
+```sh
+CARGO_BUILD_JOBS=2 linux/build.sh build --release
+linux/install.sh
+```
+
+`install.sh` copies the app to `~/.local/bin/insert`. It adds the application menu entry and the icon in `~/.local/share`. Root access is not necessary. To remove these files, run `linux/install.sh --uninstall`. Your clips and your settings stay.
+
+To make a release archive, run `linux/package.sh`. The archive is `linux/dist/insert-linux-x86_64.tar.gz`. It contains the app, the menu entry, the icon, and `install.sh`.
+
+### First run
+
+1. Start **Insert** from the application menu, or run `~/.local/bin/insert`. Insert opens no window. Its icon appears in the system tray.
+2. Plasma shows the dialog **Global Shortcuts Requested**. Click **OK** to accept `Ctrl+Shift+V`.
+3. Copy some text. Then press `Ctrl+Shift+V`. The tray opens.
+4. Click **Allow…** in the tray notice. Plasma shows a dialog with the line **Control input devices**. Click **Approve**.
+
+After step 4, `Return` pastes the selected clip into the app in front. Without this permission, Insert copies the clip and you press `Ctrl+V`.
+
+Insert pastes with a simulated `Ctrl+V`. In a terminal, Insert sends `Shift+Insert`, and it also puts the clip in the primary selection.
+
+The tray keys are the keys in [Controls](#controls), with `Ctrl` in place of `Command`.
+
+To change the shortcut, open Settings and click **Change…**. To start Insert when you log in, turn on **Open Insert at login** in Settings.
+
+### The `insert --toggle` command
+
+`insert --toggle` opens or closes the tray of the app that runs. If your desktop has no global shortcut service, bind this command to a key in the desktop settings:
+
+```sh
+~/.local/bin/insert --toggle
+```
+
+### Storage on Linux
+
+```sh
+~/.local/share/insert/
+├── index.json        # clip metadata and pinboards
+├── payloads/         # one folder for each clip, with one file for each data type
+└── thumbnails/       # one PNG for each image clip
+~/.config/insert/preferences.json                              # settings
+~/.config/autostart/io.github.kenwuqianghao.Insert.desktop     # launch at login
+~/.local/state/insert/remote-desktop-token                     # the paste permission
+```
+
+If `XDG_DATA_HOME`, `XDG_CONFIG_HOME`, or `XDG_STATE_HOME` is set, Insert uses that folder.
+
+### Known limits on Linux
+
+- The tray is a full-screen transparent window, because a Wayland app cannot set its position. A click above the tray closes it.
+- Insert finds a terminal by its app id. The list is in [`paste.rs`](./linux/crates/insert-platform/src/paste.rs). Direct paste into a terminal that is not in the list does not work.
+- If you remove the paste permission in System Settings, click **Allow…** in the tray again.
+- The macOS setting **Hide Dock icon** is **Show the icon in the system tray** on Linux.
+- There is no automatic update. Install a new build with `install.sh`.
+
 ## Storage
 
 Insert keeps its data in a folder that has the name of the bundle id:
