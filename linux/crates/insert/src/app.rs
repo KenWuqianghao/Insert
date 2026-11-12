@@ -142,8 +142,12 @@ impl App {
                 return;
             }
         };
-        if self.prefs.borrow().capture_paused {
-            return;
+        // The user can pause or ignore the app while the capture is classified.
+        {
+            let prefs = self.prefs.borrow();
+            if prefs.capture_paused || prefs.is_ignored(source.as_ref()) {
+                return;
+            }
         }
         let inserted = self
             .library
