@@ -5,7 +5,7 @@ pub mod active_app;
 pub mod autostart;
 pub mod clipboard;
 pub mod paste;
-mod portal;
+pub mod portal;
 pub mod shortcut;
 pub mod tray_icon;
 

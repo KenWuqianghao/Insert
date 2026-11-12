@@ -10,6 +10,7 @@ use insert_platform::active_app::ActiveAppTracker;
 use insert_platform::autostart::{self, Autostart};
 use insert_platform::clipboard::{ClipboardConfig, ClipboardEvent, ClipboardWatcher};
 use insert_platform::paste::{PasteError, PasteInjector, PasteKeys};
+use insert_platform::portal;
 use insert_platform::shortcut::{GlobalShortcut, ShortcutEvent};
 use insert_platform::tray_icon::{TrayEvent, TrayIcon};
 
@@ -109,13 +110,13 @@ impl Services {
         glib::spawn_future_local(Rc::clone(&inner).forward_clipboard(clipboard_changes));
         glib::spawn_future_local(Rc::clone(&inner).forward_status_menu(status_menu_events));
         glib::spawn_future_local(Rc::clone(&inner).track_active_app());
-        // The portals take the app id from the first call on the connection, so the two portal
-        // users start one after the other.
+        // A restore token that is no longer valid makes the paste connection wait for a portal
+        // dialog. The shortcut must not wait for it.
         glib::spawn_future_local({
             let inner = Rc::clone(&inner);
             async move {
-                inner.connect_paste(false).await;
-                inner.run_shortcut().await;
+                portal::register_app().await;
+                futures_lite::future::zip(inner.connect_paste(false), inner.run_shortcut()).await;
             }
         });
         (Self { inner }, receiver)

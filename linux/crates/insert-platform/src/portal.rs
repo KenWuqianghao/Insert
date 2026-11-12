@@ -6,7 +6,8 @@ static REGISTERED: AtomicBool = AtomicBool::new(false);
 
 /// Gives the portals the app id of this host process. Without it KDE stores permissions under an empty id.
 /// The portal accepts the call only as the first call on the connection, so each portal user awaits this first.
-pub(crate) async fn register_app() {
+/// A call during a running call does not wait for it, so await this once before two portal users start together.
+pub async fn register_app() {
     if REGISTERED.load(Ordering::Acquire) {
         return;
     }
