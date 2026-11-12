@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Insert
+GenericName=Clipboard Manager
+Comment=Keep a history of the clipboard and paste from a tray
+Exec=insert
+Icon=io.github.kenwuqianghao.Insert
+Terminal=false
+Categories=Utility;
+Keywords=clipboard;paste;history;
+StartupNotify=false
