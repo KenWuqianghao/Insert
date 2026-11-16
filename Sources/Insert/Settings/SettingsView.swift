@@ -164,6 +164,12 @@ private struct GeneralSettings: View {
                 if preferences.hotKeyIsUnavailable {
                     SettingsWarning(text: "Another app uses this shortcut. Record a different shortcut.")
                 }
+                LabeledContent("Shortcut to open the clip ring") {
+                    ShortcutRecorder(shortcut: $preferences.ringShortcut)
+                }
+                if preferences.ringShortcutIsUnavailable {
+                    SettingsWarning(text: "Another app or the tray uses this shortcut. Record a different shortcut.")
+                }
             }
 
             Section {

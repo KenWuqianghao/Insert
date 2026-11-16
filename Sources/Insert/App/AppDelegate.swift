@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var library: ClipLibrary?
     private var monitor: ClipboardMonitor?
     private var panelController: PanelController?
+    private var ringController: RingController?
     private var settingsController: SettingsWindowController?
     private var statusItem: NSStatusItem?
     private var pauseMenuItem: NSMenuItem?
@@ -27,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let pasteService = PasteService(library: library, monitor: monitor, preferences: preferences)
         let model = PanelModel(library: library)
         let panelController = PanelController(model: model, preferences: preferences, pasteService: pasteService)
+        let ringController = RingController(library: library, pasteService: pasteService)
         let settingsController = SettingsWindowController(
             preferences: preferences,
             actions: .init(
@@ -41,14 +43,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         self.library = library
         self.monitor = monitor
         self.panelController = panelController
+        self.ringController = ringController
         self.settingsController = settingsController
 
         configureStatusItem()
         monitor.start()
 
-        preferences.$hotKeyShortcut
-            .sink { [weak self] shortcut in
-                self?.registerHotKey(shortcut)
+        Publishers.CombineLatest(preferences.$hotKeyShortcut, preferences.$ringShortcut)
+            .sink { [weak self] tray, ring in
+                self?.registerHotKeys(tray: tray, ring: ring)
             }
             .store(in: &cancellables)
 
@@ -69,7 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func applicationWillTerminate(_ notification: Notification) {
         monitor?.stop()
         library?.flush()
-        hotKeyManager.unregister()
+        hotKeyManager.unregisterAll()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -145,13 +148,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
     }
 
-    private func registerHotKey(_ shortcut: GlobalShortcut) {
-        let status = hotKeyManager.register(shortcut: shortcut) { [weak self] in
+    private func registerHotKeys(tray: GlobalShortcut, ring: GlobalShortcut) {
+        hotKeyManager.unregisterAll()
+
+        let trayStatus = hotKeyManager.register(tray, for: .tray, actions: .init(pressed: { [weak self] in
             self?.panelController?.toggle()
+        }))
+        let ringIsUnavailable: Bool
+        if tray == ring {
+            ringIsUnavailable = true
+        } else {
+            ringIsUnavailable = hotKeyManager.register(ring, for: .ring, actions: .init(
+                pressed: { [weak self] in self?.ringController?.hotKeyPressed() },
+                released: { [weak self] in self?.ringController?.hotKeyReleased() }
+            )) != noErr
         }
-        let isUnavailable = status != noErr
-        if preferences.hotKeyIsUnavailable != isUnavailable {
-            preferences.hotKeyIsUnavailable = isUnavailable
+
+        let trayIsUnavailable = trayStatus != noErr
+        if preferences.hotKeyIsUnavailable != trayIsUnavailable {
+            preferences.hotKeyIsUnavailable = trayIsUnavailable
+        }
+        if preferences.ringShortcutIsUnavailable != ringIsUnavailable {
+            preferences.ringShortcutIsUnavailable = ringIsUnavailable
         }
     }
 
