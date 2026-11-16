@@ -22,7 +22,13 @@ final class Preferences: ObservableObject {
 
     @Published var hotKeyShortcut: GlobalShortcut {
         didSet {
-            hotKeyShortcut.save(to: defaults)
+            hotKeyShortcut.save(to: defaults, prefix: Keys.hotKey)
+        }
+    }
+
+    @Published var ringShortcut: GlobalShortcut {
+        didSet {
+            ringShortcut.save(to: defaults, prefix: Keys.ringHotKey)
         }
     }
 
@@ -54,6 +60,7 @@ final class Preferences: ObservableObject {
 
     /// Another app can own the shortcut. Then the system refuses the registration.
     @Published var hotKeyIsUnavailable = false
+    @Published var ringShortcutIsUnavailable = false
 
     private let defaults = UserDefaults.standard
 
@@ -71,7 +78,8 @@ final class Preferences: ObservableObject {
             launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
         }
 
-        hotKeyShortcut = GlobalShortcut(defaults: defaults)
+        hotKeyShortcut = GlobalShortcut(defaults: defaults, prefix: Keys.hotKey, fallback: .trayDefault)
+        ringShortcut = GlobalShortcut(defaults: defaults, prefix: Keys.ringHotKey, fallback: .ringDefault)
         pasteDirectly = defaults.bool(forKey: Keys.pasteDirectly)
         capturePaused = defaults.bool(forKey: Keys.capturePaused)
 
@@ -111,5 +119,7 @@ final class Preferences: ObservableObject {
         static let historyLimit = "historyLimit"
         static let capturePaused = "capturePaused"
         static let ignoredApps = "ignoredApps"
+        static let hotKey = "hotKey"
+        static let ringHotKey = "ringHotKey"
     }
 }

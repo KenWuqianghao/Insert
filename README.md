@@ -29,10 +29,11 @@ Click the demo to open the [full-quality video](docs/assets/insert-demo.mp4). Th
 - Type to search. Use the filter to show one type of clip.
 - Pinboards keep clips that you use frequently. The history limit does not delete pinned clips.
 - Press `Space` to see a large preview of a clip.
+- The clip ring shows the 8 newest clips in a circle around the pointer. Hold `Control+Option+V`, point at a clip to see a preview, then release to paste it.
 - Hold `Command` to show the numbers 1 to 9 on the cards. Press `Command+1` to `Command+9` to paste that card.
 - Insert skips items that an app marks as concealed or transient, for example passwords from a password manager.
 - You can pause capture, and you can ignore the apps that you select.
-- The Settings window has two tabs. **General** has launch at login, the Dock icon, the global shortcut, direct paste, and the history limit. **Privacy** has the ignored apps, the capture pause, and the command to clear the history.
+- The Settings window has two tabs. **General** has launch at login, the Dock icon, the two global shortcuts, direct paste, and the history limit. **Privacy** has the ignored apps, the capture pause, and the command to clear the history.
 - Insert stores text, links, files, images, PDFs, rich text, colors, and common media types.
 
 ![The large preview of an image clip, above the row of cards](docs/assets/insert-preview.png)
@@ -98,6 +99,16 @@ To see the download counts of each release, run `Tools/downloads.sh`. It reads t
 | Search | Type in the tray |
 | Close the preview, clear the search, or close the tray | `Esc` |
 | Open Settings | `Command+,` |
+
+### Clip ring
+
+| Action | Shortcut |
+| --- | --- |
+| Open the ring at the pointer | Global shortcut, default `Control+Option+V` |
+| Paste a clip | Hold the shortcut, point at the clip, then release. Or press the shortcut, then click the clip. |
+| Paste clip 1 to 8 | `1` to `8` |
+| Paste the selected clip | `Enter` |
+| Close the ring | `Esc`, a click outside the ring, or the shortcut again |
 
 Right-click a card to pin, rename, preview, or delete the clip. Right-click a pinboard tab to rename it, change its color, or delete it.
 
