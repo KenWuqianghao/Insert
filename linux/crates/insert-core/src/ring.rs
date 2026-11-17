@@ -54,9 +54,9 @@ pub struct Ring {
     clips: Vec<ClipId>,
     bounds: Bounds,
     center: Point,
-    /// The pointer when the ring opened. It selects nothing until it moves, also when the ring is not
-    /// centered on it near an edge of the surface.
-    opened_at: Point,
+    /// The pointer when the ring opened, until the pointer first moves. It selects nothing there, also when
+    /// the ring is not centered on it near an edge of the surface.
+    opened_at: Option<Point>,
     selection: Option<usize>,
 }
 
@@ -70,7 +70,7 @@ impl Ring {
         }
         let margin = OUTER_RADIUS + EDGE_MARGIN;
         let center = Point { x: clamp(pointer.x, margin, bounds.width - margin), y: clamp(pointer.y, margin, bounds.height - margin) };
-        Some(Self { clips, bounds, center, opened_at: pointer, selection: None })
+        Some(Self { clips, bounds, center, opened_at: Some(pointer), selection: None })
     }
 
     pub fn clips(&self) -> &[ClipId] {
@@ -91,9 +91,10 @@ impl Ring {
 
     /// Selects the segment in the direction of `pointer`. Returns true when the selection changed.
     pub fn track(&mut self, pointer: Point) -> bool {
-        if pointer == self.opened_at {
+        if self.opened_at == Some(pointer) {
             return false;
         }
+        self.opened_at = None;
         let selection = segment_at(pointer, self.center, self.clips.len());
         let changed = selection != self.selection;
         self.selection = selection;
@@ -216,6 +217,16 @@ mod tests {
         assert_eq!(ring.selection(), None);
         assert!(ring.track(at(1.0, 1.0)));
         assert_eq!(ring.selection(), Some(7), "the segment toward the top left corner");
+    }
+
+    #[test]
+    fn a_return_to_where_the_ring_opened_clears_the_selection_in_the_center() {
+        let opened = at(SCREEN.width / 2.0, SCREEN.height / 2.0);
+        let mut ring = Ring::open(ids(8), opened, SCREEN).unwrap();
+        assert!(ring.track(at(opened.x, opened.y - 100.0)));
+        assert!(ring.selection().is_some());
+        assert!(ring.track(opened));
+        assert_eq!(ring.selection(), None);
     }
 
     #[test]

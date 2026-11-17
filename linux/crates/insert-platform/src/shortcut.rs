@@ -110,7 +110,7 @@ impl GlobalShortcut {
         });
         let deactivated = deactivated
             .filter_map(|signal| ShortcutId::from_id(signal.shortcut_id()).map(ShortcutEvent::Deactivated));
-        let changed = changed.flat_map(|signal| stream::iter(triggers_of(signal.shortcuts())));
+        let changed = changed.flat_map(|signal| stream::iter(changed_triggers_of(signal.shortcuts())));
         let signals: Signals = Box::pin(stream::or(stream::or(activated, deactivated), changed));
         let (stop, stopped) = async_channel::bounded::<()>(1);
         std::thread::Builder::new()
@@ -188,6 +188,18 @@ fn triggers_of(shortcuts: &[Shortcut]) -> Vec<ShortcutEvent> {
                 .find(|shortcut| shortcut.id() == id.id())
                 .map(|shortcut| shortcut.trigger_description().to_owned())
                 .unwrap_or_default(),
+        })
+        .collect()
+}
+
+/// One event for each shortcut that the change signal lists. The portal can list only the changed shortcuts,
+/// so a shortcut that the signal omits keeps its trigger.
+fn changed_triggers_of(shortcuts: &[Shortcut]) -> Vec<ShortcutEvent> {
+    ShortcutId::ALL
+        .into_iter()
+        .filter_map(|id| {
+            let shortcut = shortcuts.iter().find(|shortcut| shortcut.id() == id.id())?;
+            Some(ShortcutEvent::TriggerChanged { id, trigger: shortcut.trigger_description().to_owned() })
         })
         .collect()
 }
