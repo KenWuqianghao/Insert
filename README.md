@@ -149,7 +149,7 @@ To make the screenshots and the demo video in this README again:
 make marketing-assets
 ```
 
-This command records the real tray and clip ring views with sample clips. It does not read your clipboard. It needs `ffmpeg` and the Screen Recording permission for your terminal. Keep the screen unlocked while it runs. If the recording loses frames, the command records the demo again. It makes a maximum of three takes.
+This command records the real tray and clip ring views with sample clips. It does not read your clipboard. It also makes the sounds of the video from sine waves and noise. It needs `ffmpeg` and the Screen Recording permission for your terminal. Keep the screen unlocked while it runs. If the recording loses frames, the command records the demo again. It makes a maximum of three takes.
 
 To build the installer:
 

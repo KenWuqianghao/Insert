@@ -4,7 +4,7 @@ import Combine
 import ScreenCaptureKit
 import SwiftUI
 
-// Records the real tray, the real clip ring, and the real Settings window with sample clips.
+// Records the real tray, the real clip ring, and the real Settings window with sample clips, and makes the sounds of the demo video.
 // The tray is in a stage window behind the other windows. ScreenCaptureKit captures only the windows of this tool.
 // The tool does not read the general pasteboard and does not post keys. It needs the Screen Recording permission.
 
@@ -189,7 +189,13 @@ private final class Director {
         let at: Double
     }
 
+    private struct SoundEvent {
+        let sound: Sound
+        let seconds: Double
+    }
+
     private var steps: [Step] = []
+    private var sounds: [SoundEvent] = []
     private var recordingStart = Date()
 
     /// ScreenCaptureKit drops frames when the Mac is busy, and the video then skips animations.
@@ -201,6 +207,7 @@ private final class Director {
             stage.pasted = []
             stage.pointer = nil
             steps = []
+            sounds = []
             await pause(0.6)
 
             try await capture.startRecording(to: url)
@@ -216,6 +223,7 @@ private final class Director {
             }
             if incomplete.isEmpty {
                 try writeChapters(frames: frames)
+                try writeSoundtrack(frames: frames)
                 return
             }
             let times = incomplete.map { String(format: "%.1f s", $0.seconds) }.joined(separator: ", ")
@@ -258,6 +266,35 @@ private final class Director {
         try encoder.encode(chapters).write(to: output.appendingPathComponent("insert-demo-chapters.json"))
     }
 
+    /// A change shows in the first frame after its event, so each sound starts at that frame.
+    private func writeSoundtrack(frames: [Double]) throws {
+        let rate = Sound.sampleRate
+        let starts = sounds.map { event in frames.first(where: { $0 >= event.seconds }) ?? event.seconds }
+        let length = Int(((starts.max() ?? 0) + 1) * rate)
+        var mix = [Float](repeating: 0, count: length)
+        var noise = SeededNoise()
+        for (event, seconds) in zip(sounds, starts) {
+            let start = Int(seconds * rate)
+            for (offset, sample) in event.sound.samples(noise: &noise).enumerated() where start + offset < length {
+                mix[start + offset] += sample
+            }
+        }
+
+        let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1)!
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(length))!
+        buffer.frameLength = AVAudioFrameCount(length)
+        for (index, sample) in mix.enumerated() {
+            buffer.floatChannelData![0][index] = min(max(sample, -1), 1)
+        }
+        let file = try AVAudioFile(
+            forWriting: output.appendingPathComponent("insert-demo-sounds.wav"),
+            settings: [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: rate, AVNumberOfChannelsKey: 1, AVLinearPCMBitDepthKey: 16],
+            commonFormat: .pcmFormatFloat32,
+            interleaved: false
+        )
+        try file.write(from: buffer)
+    }
+
     private func playDemo() async {
         await pause(0.9)
 
@@ -268,9 +305,9 @@ private final class Director {
         await press(["→"], "Move", .move(1), hold: 0.5)
         await press(["→"], "Move", .move(1), hold: 0.6)
 
-        await press(["Space"], "Preview", .togglePreview, hold: 1.8, animates: true, chapter: "Preview")
+        await press(["Space"], "Preview", .togglePreview, hold: 1.8, animates: true, chapter: "Preview", sound: .open)
         await press(["→"], "Move", .move(1), hold: 1.3)
-        await press(["Space"], "Close the preview", .togglePreview, hold: 0.9, animates: true)
+        await press(["Space"], "Close the preview", .togglePreview, hold: 0.9, animates: true, sound: .close)
 
         var typed = ""
         for character in "git" {
@@ -313,18 +350,27 @@ private final class Director {
     }
 
     private func paste(_ clip: Clip) {
+        play(.paste)
         stage.pasted.append(library.payload(for: clip.id)?.plainText ?? "")
     }
 
-    private func press(_ keys: [String], _ label: String, _ command: PanelCommand, hold: Double, animates: Bool = false, chapter: String? = nil) async {
+    private func press(_ keys: [String], _ label: String, _ command: PanelCommand, hold: Double, animates: Bool = false, chapter: String? = nil, sound: Sound? = nil) async {
         cue(keys, label, animates: animates, chapter: chapter)
+        if let sound {
+            play(sound)
+        }
         model.perform(command)
         await pause(hold)
     }
 
     private func cue(_ keys: [String], _ label: String, for seconds: Double = 1.3, animates: Bool = false, chapter: String? = nil) {
         addStep(animates: animates, chapter: chapter)
+        play(.key)
         stage.show(keys, label, for: seconds)
+    }
+
+    private func play(_ sound: Sound) {
+        sounds.append(SoundEvent(sound: sound, seconds: Date().timeIntervalSince(recordingStart)))
     }
 
     private func addStep(animates: Bool, chapter: String? = nil) {
@@ -347,6 +393,7 @@ private final class Director {
         let visible = CGRect(x: 0, y: menuBar, width: Self.stageSize.width, height: Self.stageSize.height - menuBar)
         _ = ring.present(Array(library.clips.prefix(RingModel.capacity)), pointer: stage.pointer ?? Self.ringPointer, bounds: visible)
         stage.isRingShown = true
+        play(.ring)
     }
 
     /// The same fade as the ring panel of `RingController`.
@@ -391,6 +438,7 @@ private final class Director {
 
     private func showTray() {
         isTrayShown = true
+        play(.open)
         model.prepareToShow(needsPastePermission: false)
 
         let visibleFrame = trayFrame(for: model.mode)
@@ -408,6 +456,7 @@ private final class Director {
 
     private func hideTray() {
         isTrayShown = false
+        play(.close)
         let hiddenFrame = tray.frame.offsetBy(dx: 0, dy: -tray.frame.height)
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.16
@@ -595,6 +644,84 @@ private final class Director {
         if let folder = applicationSupport?.appendingPathComponent(storageID, isDirectory: true) {
             try? FileManager.default.removeItem(at: folder)
         }
+    }
+}
+
+// MARK: - Sound
+
+/// The sounds of the demo video. The tool makes them from sine waves and noise, so the repository needs no audio files.
+private enum Sound {
+    case key
+    case open
+    case close
+    case paste
+    case ring
+
+    static let sampleRate = 48_000.0
+
+    func samples(noise: inout SeededNoise) -> [Float] {
+        switch self {
+        case .key: Self.click(gain: 0.3, noise: &noise)
+        case .open: Self.glide(from: 520, to: 780, gain: 0.16)
+        case .close: Self.glide(from: 700, to: 470, gain: 0.12)
+        case .paste: Self.chord([1046.5, 1568], spread: 0.04, decay: 0.05, gain: 0.12)
+        case .ring: Self.chord([659.3, 987.8, 1318.5], spread: 0.03, decay: 0.16, gain: 0.1)
+        }
+    }
+
+    private static func render(_ seconds: Double, _ value: (Double) -> Double) -> [Float] {
+        (0..<Int(seconds * sampleRate)).map { Float(value(Double($0) / sampleRate)) }
+    }
+
+    /// A short attack prevents a click at the start of a tone.
+    private static func attack(_ t: Double) -> Double {
+        min(t / 0.004, 1)
+    }
+
+    /// A noise tick for the key cap and a low thump for the key travel.
+    private static func click(gain: Double, noise: inout SeededNoise) -> [Float] {
+        var previous = 0.0
+        return render(0.05) { t in
+            let sample = noise.next()
+            let tick = (sample - previous) * exp(-t / 0.003)
+            previous = sample
+            let thump = sin(2 * .pi * 170 * t) * exp(-t / 0.008)
+            return gain * (0.5 * tick + 0.6 * thump)
+        }
+    }
+
+    private static func glide(from start: Double, to end: Double, gain: Double) -> [Float] {
+        let sweep = 0.09
+        return render(0.3) { t in
+            let swept = min(t, sweep)
+            let phase = 2 * .pi * (start * swept + (end - start) * swept * swept / (2 * sweep) + end * max(t - sweep, 0))
+            return gain * attack(t) * exp(-t / 0.05) * (sin(phase) + 0.25 * sin(2 * phase))
+        }
+    }
+
+    /// The notes start one after the other, `spread` seconds apart.
+    private static func chord(_ frequencies: [Double], spread: Double, decay: Double, gain: Double) -> [Float] {
+        render(Double(frequencies.count - 1) * spread + decay * 6) { t in
+            frequencies.enumerated().reduce(0) { sum, note in
+                let local = t - Double(note.offset) * spread
+                guard local >= 0 else { return sum }
+                return sum + gain * attack(local) * exp(-local / decay) * sin(2 * .pi * note.element * local)
+            }
+        }
+    }
+}
+
+/// SplitMix64. The same seed gives the same clicks in each recording.
+private struct SeededNoise {
+    private var state: UInt64 = 0x1D2C_3B4A
+
+    mutating func next() -> Double {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        z ^= z >> 31
+        return Double(z >> 11) / Double(1 << 53) * 2 - 1
     }
 }
 
