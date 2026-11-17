@@ -10,7 +10,7 @@ Insert has no account and no cloud sync. All data stays on your Mac.
 
 ## Demo
 
-[![Demo of Insert: open the tray, preview a clip, search, change the pinboard, and paste](docs/assets/insert-demo.gif)](docs/assets/insert-demo.mp4)
+[![Demo of Insert: open the tray, preview a clip, search, change the pinboard, paste, and paste a link from the clip ring](docs/assets/insert-demo.gif)](docs/assets/insert-demo.mp4)
 
 Click the demo to open the [full-quality video](docs/assets/insert-demo.mp4). The demo shows these steps:
 
@@ -19,6 +19,7 @@ Click the demo to open the [full-quality video](docs/assets/insert-demo.mp4). Th
 3. Type to search.
 4. Press `Tab` to go to the next pinboard.
 5. Hold `Command`, then press `1` to paste the first card into the email.
+6. Hold `Option` to open the clip ring. Point at the link, then release `Option` to paste it.
 
 ## Highlights
 
@@ -37,6 +38,8 @@ Click the demo to open the [full-quality video](docs/assets/insert-demo.mp4). Th
 - Insert stores text, links, files, images, PDFs, rich text, colors, and common media types.
 
 ![The large preview of an image clip, above the row of cards](docs/assets/insert-preview.png)
+
+![The clip ring around the pointer, with the preview of the selected link](docs/assets/insert-ring.png)
 
 <img src="docs/assets/insert-settings.png" alt="The General tab of the Settings window" width="500">
 
@@ -146,7 +149,7 @@ To make the screenshots and the demo video in this README again:
 make marketing-assets
 ```
 
-This command records the real tray views with sample clips. It does not read your clipboard. It needs `ffmpeg` and the Screen Recording permission for your terminal. Keep the screen unlocked while it runs. If the recording loses frames, the command records the demo again. It makes a maximum of three takes.
+This command records the real tray and clip ring views with sample clips. It does not read your clipboard. It needs `ffmpeg` and the Screen Recording permission for your terminal. Keep the screen unlocked while it runs. If the recording loses frames, the command records the demo again. It makes a maximum of three takes.
 
 To build the installer:
 

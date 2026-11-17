@@ -4,7 +4,7 @@ import Combine
 import ScreenCaptureKit
 import SwiftUI
 
-// Records the real tray and the real Settings window with sample clips.
+// Records the real tray, the real clip ring, and the real Settings window with sample clips.
 // The tray is in a stage window behind the other windows. ScreenCaptureKit captures only the windows of this tool.
 // The tool does not read the general pasteboard and does not post keys. It needs the Screen Recording permission.
 
@@ -38,7 +38,9 @@ private struct Caption: Equatable {
 @MainActor
 private final class Stage: ObservableObject {
     @Published var caption: Caption?
-    @Published var pastedText = ""
+    @Published var pasted: [String] = []
+    @Published var pointer: CGPoint?
+    @Published var isRingShown = false
 
     private var captionToken = 0
 
@@ -66,6 +68,7 @@ private final class Director {
     private let model: PanelModel
     private let window: NSWindow
     private let tray = TrayBackdropView()
+    private let ring = RingModel()
     private var isTrayShown = false
     private var cancellables = Set<AnyCancellable>()
 
@@ -101,6 +104,11 @@ private final class Director {
         tray.addSubview(hostingView)
         tray.isHidden = true
         content.addSubview(tray)
+
+        let overlay = NSHostingView(rootView: PointerLayer(stage: stage, ring: ring, library: library))
+        overlay.sizingOptions = []
+        overlay.frame = content.bounds
+        content.addSubview(overlay)
         window.contentView = content
 
         model.actions.activate = { [weak self] clip, _ in
@@ -109,7 +117,7 @@ private final class Director {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 // The text fades in after the tray closes. The take check needs the frames of each animation.
                 self.addStep(animates: true)
-                self.stage.pastedText = self.library.payload(for: clip.id)?.plainText ?? ""
+                self.paste(clip)
             }
         }
 
@@ -152,6 +160,16 @@ private final class Director {
         hideTray()
         await pause(0.6)
 
+        stage.pointer = Self.ringPointer
+        showRing()
+        await pause(0.6)
+        await glidePointer(to: ringIconPoint(), duration: 0.3)
+        await pause(0.8)
+        try await capture.writePNG(to: output.appendingPathComponent("insert-ring.png"))
+        hideRing()
+        stage.pointer = nil
+        await pause(0.6)
+
         try await recordDemo(with: capture)
 
         try await captureSettings()
@@ -180,7 +198,8 @@ private final class Director {
         let url = output.appendingPathComponent("insert-demo-raw.mp4")
         let takes = 3
         for take in 1...takes {
-            stage.pastedText = ""
+            stage.pasted = []
+            stage.pointer = nil
             steps = []
             await pause(0.6)
 
@@ -272,7 +291,29 @@ private final class Director {
         await pause(1.1)
         cue(["⌘", "1"], "Paste the first card", for: 1.4, animates: true)
         model.perform(.activateIndex(0))
-        await pause(2.8)
+        await pause(2.0)
+
+        stage.pointer = CGPoint(x: Self.ringPointer.x + 260, y: Self.ringPointer.y - 120)
+        await glidePointer(to: Self.ringPointer, duration: 0.6)
+        await pause(0.3)
+        cue(["⌥"], "Hold Option", for: 2.6, chapter: "Clip ring")
+        await pause(ModifierHoldTrigger.delay)
+        addStep(animates: true)
+        showRing()
+        await pause(0.8)
+        await glidePointer(to: ringIconPoint(), duration: 0.4)
+        await pause(1.4)
+        cue(["⌥"], "Release to paste", for: 1.4, animates: true)
+        hideRing()
+        await pause(0.2)
+        if ring.clips.indices.contains(Self.ringLinkIndex) {
+            paste(ring.clips[Self.ringLinkIndex])
+        }
+        await pause(2.6)
+    }
+
+    private func paste(_ clip: Clip) {
+        stage.pasted.append(library.payload(for: clip.id)?.plainText ?? "")
     }
 
     private func press(_ keys: [String], _ label: String, _ command: PanelCommand, hold: Double, animates: Bool = false, chapter: String? = nil) async {
@@ -292,6 +333,48 @@ private final class Director {
 
     private func pause(_ seconds: Double) async {
         try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+    }
+
+    // MARK: Clip ring
+
+    /// The pointer is on the desktop next to the email, so the glass shows the wallpaper and the ring does not cover the pasted text.
+    private static let ringPointer = CGPoint(x: 205, y: 610)
+    /// The GitHub link is the second newest sample clip.
+    private static let ringLinkIndex = 1
+
+    private func showRing() {
+        let menuBar: CGFloat = 30
+        let visible = CGRect(x: 0, y: menuBar, width: Self.stageSize.width, height: Self.stageSize.height - menuBar)
+        _ = ring.present(Array(library.clips.prefix(RingModel.capacity)), pointer: stage.pointer ?? Self.ringPointer, bounds: visible)
+        stage.isRingShown = true
+    }
+
+    /// The same fade as the ring panel of `RingController`.
+    private func hideRing() {
+        withAnimation(.linear(duration: 0.12)) {
+            stage.isRingShown = false
+        }
+        ring.dismiss()
+    }
+
+    private func ringIconPoint() -> CGPoint {
+        let angle = RingGeometry.direction(of: Self.ringLinkIndex, count: ring.clips.count)
+        return CGPoint(x: ring.center.x + cos(angle) * RingGeometry.iconRadius, y: ring.center.y + sin(angle) * RingGeometry.iconRadius)
+    }
+
+    private func glidePointer(to target: CGPoint, duration: Double) async {
+        let start = stage.pointer ?? target
+        let frames = max(Int(duration * 60), 1)
+        for frame in 1...frames {
+            let t = Double(frame) / Double(frames)
+            let eased = t * t * (3 - 2 * t)
+            let point = CGPoint(x: start.x + (target.x - start.x) * eased, y: start.y + (target.y - start.y) * eased)
+            stage.pointer = point
+            if stage.isRingShown {
+                ring.track(point)
+            }
+            await pause(duration / Double(frames))
+        }
     }
 
     // MARK: Tray
@@ -357,7 +440,7 @@ private final class Director {
         let known = Set(NSApp.windows.map(\.windowNumber))
         let controller = SettingsWindowController(
             preferences: preferences,
-            actions: .init(clearHistory: {}, requestPastePermission: {})
+            actions: .init(clearHistory: {}, requestAccessibility: {})
         )
         controller.show()
 
@@ -588,7 +671,11 @@ private final class WindowCapture {
 
         for await _ in observer.finished { break }
 
-        try await stream.stopCapture()
+        do {
+            try await stream.stopCapture()
+        } catch let error as SCStreamError where error.code == .attemptToStopStreamState {
+            // The stream can stop by itself after the recording output is removed. The file is complete then.
+        }
         self.stream = nil
         self.recordingOutput = nil
     }
@@ -624,7 +711,7 @@ private struct DesktopView: View {
             Image(nsImage: Wallpaper.image)
                 .resizable()
 
-            ComposeWindow(pastedText: stage.pastedText)
+            ComposeWindow(pasted: stage.pasted)
                 .frame(width: 820, height: 470)
                 .padding(.top, 104)
 
@@ -721,7 +808,7 @@ private struct MenuBar: View {
 
 /// The app that gets the paste in the demo.
 private struct ComposeWindow: View {
-    let pastedText: String
+    let pasted: [String]
 
     private let ink = Color(red: 0.11, green: 0.11, blue: 0.12)
     private let secondary = Color(red: 0.11, green: 0.11, blue: 0.12).opacity(0.5)
@@ -750,8 +837,8 @@ private struct ComposeWindow: View {
                 Text("Hi all,")
                 Text("Here are the notes for the release:")
 
-                if !pastedText.isEmpty {
-                    Text(pastedText)
+                ForEach(pasted, id: \.self) { text in
+                    Text(text)
                         .lineSpacing(5)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
@@ -770,7 +857,7 @@ private struct ComposeWindow: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.black.opacity(0.10), lineWidth: 0.5))
         .shadow(color: Color(red: 0.45, green: 0.12, blue: 0.0).opacity(0.35), radius: 40, y: 22)
-        .animation(.easeOut(duration: 0.22), value: pastedText)
+        .animation(.easeOut(duration: 0.22), value: pasted)
     }
 
     private func field(_ name: String, _ value: String) -> some View {
@@ -785,6 +872,31 @@ private struct ComposeWindow: View {
             .frame(height: 38)
             rule.frame(height: 1).padding(.leading, 24)
         }
+    }
+}
+
+/// The real ring view and a drawn pointer. The stage window ignores the mouse, so the director moves the pointer.
+private struct PointerLayer: View {
+    @ObservedObject var stage: Stage
+    let ring: RingModel
+    let library: ClipLibrary
+
+    var body: some View {
+        ZStack {
+            if stage.isRingShown {
+                RingView(model: ring, library: library, glassBlending: .withinWindow)
+                    .transition(.opacity)
+            }
+            if let pointer = stage.pointer {
+                let cursor = NSCursor.arrow
+                Image(nsImage: cursor.image)
+                    .position(
+                        x: pointer.x + cursor.image.size.width / 2 - cursor.hotSpot.x,
+                        y: pointer.y + cursor.image.size.height / 2 - cursor.hotSpot.y
+                    )
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

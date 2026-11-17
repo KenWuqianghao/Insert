@@ -33,7 +33,7 @@ final class ModifierHoldTrigger {
         case holding
     }
 
-    private static let delay: TimeInterval = 0.3
+    static let delay: TimeInterval = 0.3
     private static let pointerTolerance: CGFloat = 10
     private static let modifierMask: NSEvent.ModifierFlags = [.command, .option, .control, .shift, .function]
     /// From kVK_RightCommand to kVK_Function, including Caps Lock.

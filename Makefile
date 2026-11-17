@@ -111,7 +111,7 @@ notarize:
 # ScreenCaptureKit writes no frames while the stage does not change, so the pad holds the last frame after the paste.
 DEMO_FRAME := crop='trunc(min(iw\,ih*16/10)/2)*2':'trunc(min(ih\,iw*10/16)/2)*2',tpad=stop_mode=clone:stop_duration=1.5
 
-# The tool records the real tray views with sample clips. It needs the Screen Recording permission and ffmpeg.
+# The tool records the real tray and clip ring views with sample clips. It needs the Screen Recording permission and ffmpeg.
 marketing-assets: $(SPARKLE_STAMP)
 	@mkdir -p "$(MARKETING_DIR)"
 	swiftc -O -parse-as-library -target $(ARCH)-apple-macosx15.0 \
