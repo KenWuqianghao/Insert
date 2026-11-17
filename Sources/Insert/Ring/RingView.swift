@@ -39,10 +39,11 @@ enum RingGeometry {
 struct RingView: View {
     @ObservedObject var model: RingModel
     let library: ClipLibrary
+    var glassBlending = NSVisualEffectView.BlendingMode.behindWindow
 
     var body: some View {
         ZStack {
-            DonutView(model: model)
+            DonutView(model: model, glassBlending: glassBlending)
                 .id(model.showCount)
                 .position(model.center)
 
@@ -70,6 +71,7 @@ struct RingView: View {
 
 private struct DonutView: View {
     @ObservedObject var model: RingModel
+    let glassBlending: NSVisualEffectView.BlendingMode
 
     @State private var appeared = false
 
@@ -78,7 +80,7 @@ private struct DonutView: View {
         let hairline = Color.white.opacity(0.16)
 
         ZStack {
-            RingGlass()
+            RingGlass(blending: glassBlending)
 
             Circle().strokeBorder(hairline, lineWidth: 1)
             Circle().stroke(hairline, lineWidth: 1)
@@ -138,10 +140,12 @@ private struct DonutView: View {
 
 /// A mask image gives the shape, because the blur comes from the window server.
 private struct RingGlass: NSViewRepresentable {
+    let blending: NSVisualEffectView.BlendingMode
+
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = PassThroughEffectView()
         view.material = .hudWindow
-        view.blendingMode = .behindWindow
+        view.blendingMode = blending
         view.state = .active
         view.maskImage = Self.mask
         return view

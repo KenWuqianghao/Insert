@@ -111,7 +111,7 @@ notarize:
 # ScreenCaptureKit writes no frames while the stage does not change, so the pad holds the last frame after the paste.
 DEMO_FRAME := crop='trunc(min(iw\,ih*16/10)/2)*2':'trunc(min(ih\,iw*10/16)/2)*2',tpad=stop_mode=clone:stop_duration=1.5
 
-# The tool records the real tray views with sample clips. It needs the Screen Recording permission and ffmpeg.
+# The tool records the real tray and clip ring views with sample clips, and makes the sounds of the demo. It needs the Screen Recording permission and ffmpeg.
 marketing-assets: $(SPARKLE_STAMP)
 	@mkdir -p "$(MARKETING_DIR)"
 	swiftc -O -parse-as-library -target $(ARCH)-apple-macosx15.0 \
@@ -132,8 +132,9 @@ marketing-assets: $(SPARKLE_STAMP)
 		-framework AVFoundation
 	"$(BUILD_DIR)/MarketingAssets" "$(MARKETING_DIR)"
 	@cp "$(MARKETING_DIR)"/insert-*.png docs/assets/
-	ffmpeg -loglevel error -y -i "$(MARKETING_DIR)/insert-demo-raw.mp4" \
-		-vf "$(DEMO_FRAME),fps=60,scale=1920:1200:flags=lanczos" -c:v libx264 -crf 23 -preset slow -pix_fmt yuv420p -movflags +faststart -an \
+	ffmpeg -loglevel error -y -i "$(MARKETING_DIR)/insert-demo-raw.mp4" -i "$(MARKETING_DIR)/insert-demo-sounds.wav" \
+		-vf "$(DEMO_FRAME),fps=60,scale=1920:1200:flags=lanczos" -c:v libx264 -crf 23 -preset slow -pix_fmt yuv420p \
+		-af apad -c:a aac -b:a 128k -shortest -movflags +faststart \
 		docs/assets/insert-demo.mp4
 	ffmpeg -loglevel error -y -i "$(MARKETING_DIR)/insert-demo-raw.mp4" \
 		-vf "$(DEMO_FRAME),fps=12,scale=960:600:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
