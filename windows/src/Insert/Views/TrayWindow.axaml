@@ -1,0 +1,190 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="using:Insert.Views"
+        x:Class="Insert.Views.TrayWindow"
+        x:DataType="v:TrayViewModel"
+        Title="Insert"
+        WindowDecorations="None"
+        Topmost="True"
+        ShowInTaskbar="False"
+        CanResize="False"
+        CanMinimize="False"
+        CanMaximize="False"
+        WindowStartupLocation="Manual"
+        TransparencyLevelHint="AcrylicBlur, Mica, Blur, None"
+        Background="Transparent">
+  <Window.Styles>
+    <Style Selector="TextBox.bare">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="6,0" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="FontSize" Value="14" />
+    </Style>
+    <Style Selector="TextBox.bare /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="TextBox.bare:pointerover /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="TextBox.bare:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="Button.scope">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="11,0" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+      <Setter Property="FontWeight" Value="Medium" />
+    </Style>
+    <Style Selector="Button.scope:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Fill08}" />
+    </Style>
+    <Style Selector="Button.scope.selected">
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.scope.selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Fill12}" />
+    </Style>
+
+    <Style Selector="Panel#Body">
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.2" Easing="CubicEaseOut" />
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.22" Easing="CubicEaseOut" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Panel#Body.hidden">
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="RenderTransform" Value="translateY(40px)" />
+    </Style>
+  </Window.Styles>
+
+  <Panel x:Name="Body">
+    <Border x:Name="Glass" CornerRadius="16,16,0,0" Background="{DynamicResource TrayGlassTint}" />
+
+    <Grid RowDefinitions="*,54,270">
+      <!-- Preview -->
+      <ContentControl Grid.Row="0" Content="{Binding Preview}" IsVisible="{Binding IsPreviewing}">
+        <ContentControl.ContentTemplate>
+          <DataTemplate x:DataType="v:PreviewViewModel">
+            <v:PreviewView />
+          </DataTemplate>
+        </ContentControl.ContentTemplate>
+      </ContentControl>
+
+      <!-- Top bar -->
+      <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" Margin="22,6,22,0">
+        <Border Width="240" Height="30" CornerRadius="8" Background="{DynamicResource Fill08}" VerticalAlignment="Center">
+          <Grid ColumnDefinitions="Auto,*,Auto" Margin="10,0,6,0">
+            <PathIcon Data="{StaticResource Icon.Search}" Width="14" Height="14" />
+            <TextBox x:Name="SearchBox" Grid.Column="1" Classes="bare" PlaceholderText="Search" Text="{Binding Query}" />
+            <Button Grid.Column="2" Classes="plain" CornerRadius="9" Width="18" Height="18" IsVisible="{Binding HasQuery}" Click="ClearQuery">
+              <PathIcon Data="{StaticResource Icon.Clear}" Width="14" Height="14" />
+            </Button>
+          </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Column="1" Margin="14,0,0,0" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+          <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <ItemsControl x:Name="ScopeTabs" ItemsSource="{Binding Scopes}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" Spacing="4" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="v:ScopeTabViewModel">
+                  <Button Classes="scope" Classes.selected="{Binding IsSelected}" Click="SelectScope" ContextRequested="ScopeMenu">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Ellipse Width="8" Height="8" Fill="{Binding Dot}" VerticalAlignment="Center"
+                               IsVisible="{Binding Dot, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                      <TextBlock Text="{Binding Title}" FontSize="13" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Classes="plain" Width="26" Height="26" CornerRadius="13" Click="NewPinboard" ToolTip.Tip="New pinboard">
+              <PathIcon Data="{StaticResource Icon.Add}" Width="12" Height="12" />
+            </Button>
+          </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Column="3" Height="28" CornerRadius="14" Background="{StaticResource NoticeBackground}" Padding="10,0,4,0"
+                Margin="0,0,10,0" IsVisible="{Binding CapturePaused}">
+          <StackPanel Orientation="Horizontal" Spacing="7">
+            <PathIcon Data="{StaticResource Icon.PauseCircle}" Width="14" Height="14" Foreground="{StaticResource NoticeOrange}" VerticalAlignment="Center" />
+            <TextBlock Text="Capture is paused" FontSize="12" FontWeight="Medium" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="Resume" FontSize="12" Padding="8,1" MinHeight="0" Height="22" VerticalAlignment="Center" Click="ResumeCapture" />
+          </StackPanel>
+        </Border>
+
+        <Button x:Name="FilterButton" Grid.Column="4" Classes="plain" Height="28" Padding="8,0" CornerRadius="6" Click="ShowFilterMenu" ToolTip.Tip="Filter by type">
+          <StackPanel Orientation="Horizontal" Spacing="5">
+            <PathIcon x:Name="FilterIcon" Data="{StaticResource Icon.Filter}" Width="14" Height="14" />
+            <TextBlock Text="{Binding KindFilterName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
+                       Foreground="{DynamicResource SystemAccentColor}" IsVisible="{Binding HasKindFilter}" />
+          </StackPanel>
+        </Button>
+
+        <Button x:Name="MoreButton" Grid.Column="5" Classes="plain" Width="30" Height="28" CornerRadius="6" Click="ShowMoreMenu">
+          <PathIcon Data="{StaticResource Icon.More}" Width="15" Height="15" />
+        </Button>
+      </Grid>
+
+      <!-- Cards -->
+      <Panel Grid.Row="2">
+        <ItemsControl x:Name="Strip" ItemsSource="{Binding Cards}" IsVisible="{Binding HasCards}">
+          <ItemsControl.Template>
+            <ControlTemplate>
+              <ScrollViewer x:Name="StripScroller" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+                <ItemsPresenter x:Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" Margin="22,8,6,30" />
+              </ScrollViewer>
+            </ControlTemplate>
+          </ItemsControl.Template>
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <VirtualizingStackPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="v:CardViewModel">
+              <v:ClipCardView Margin="0,0,16,0" PointerPressed="CardPressed" ContextRequested="CardMenu" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <StackPanel Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,16"
+                    IsVisible="{Binding !HasCards}">
+          <PathIcon Data="{Binding EmptyIcon}" Width="34" Height="34" Foreground="{DynamicResource TextTertiary}" />
+          <TextBlock Text="{Binding EmptyTitle}" FontSize="17" FontWeight="SemiBold" Classes="secondary" HorizontalAlignment="Center" />
+          <TextBlock Text="{Binding EmptyDetail}" FontSize="13" Classes="tertiary" HorizontalAlignment="Center" />
+        </StackPanel>
+      </Panel>
+    </Grid>
+
+    <Border CornerRadius="16,16,0,0" BorderThickness="1,1,1,0" BorderBrush="{DynamicResource TrayEdge}" IsHitTestVisible="False" />
+
+    <!-- Name prompt -->
+    <Panel Background="#47000000" IsVisible="{Binding IsNaming}">
+      <Border Width="320" Padding="18" CornerRadius="12" HorizontalAlignment="Center" VerticalAlignment="Center"
+              Background="{DynamicResource CardBackground}" BoxShadow="0 6 18 0 #4D000000">
+        <StackPanel Spacing="10">
+          <TextBlock Text="{Binding NamingTitle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" />
+          <TextBox x:Name="NameBox" PlaceholderText="Name" FontSize="14" KeyDown="NameKeyDown" />
+          <TextBlock Text="Press Enter to save. Press Esc to cancel." FontSize="11" Classes="secondary" />
+        </StackPanel>
+      </Border>
+    </Panel>
+  </Panel>
+</Window>

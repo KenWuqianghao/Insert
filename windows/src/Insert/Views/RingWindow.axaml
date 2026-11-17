@@ -1,0 +1,41 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="using:Insert.Views"
+        x:Class="Insert.Views.RingWindow"
+        Title="Insert Clip Ring"
+        WindowDecorations="None"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        CanResize="False"
+        CanMinimize="False"
+        CanMaximize="False"
+        WindowStartupLocation="Manual"
+        TransparencyLevelHint="Transparent"
+        Background="#01000000">
+  <Window.Styles>
+    <Style Selector="v|RingView">
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.16" Easing="CubicEaseOut" />
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" Easing="BackEaseOut" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="v|RingView.hidden">
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="RenderTransform" Value="scale(0.7)" />
+    </Style>
+    <Style Selector="v|ClipCardView#PreviewCard">
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.12" Easing="CubicEaseOut" />
+        </Transitions>
+      </Setter>
+    </Style>
+  </Window.Styles>
+  <Canvas x:Name="Surface">
+    <v:RingView x:Name="Ring" Classes="hidden" />
+    <v:ClipCardView x:Name="PreviewCard" Opacity="0" IsHitTestVisible="False" />
+  </Canvas>
+</Window>

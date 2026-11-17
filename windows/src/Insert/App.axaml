@@ -1,0 +1,77 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Insert.App"
+             Name="Insert"
+             RequestedThemeVariant="Default">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://Insert/Assets/Icons.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="CardBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="CardStroke" Color="#1A000000" />
+          <!-- Laid over the acrylic or Mica backdrop. -->
+          <SolidColorBrush x:Key="TrayGlassTint" Color="#99F3F3F3" />
+          <!-- Used when the system gives no backdrop. -->
+          <SolidColorBrush x:Key="TraySolid" Color="#F3F3F3" />
+          <SolidColorBrush x:Key="TrayEdge" Color="#24FFFFFF" />
+          <SolidColorBrush x:Key="Fill08" Color="#14000000" />
+          <SolidColorBrush x:Key="Fill12" Color="#1F000000" />
+          <SolidColorBrush x:Key="TextPrimary" Color="#E4000000" />
+          <SolidColorBrush x:Key="TextSecondary" Color="#9E000000" />
+          <SolidColorBrush x:Key="TextTertiary" Color="#72000000" />
+          <SolidColorBrush x:Key="SettingsBackground" Color="#F3F3F3" />
+          <SolidColorBrush x:Key="SettingsCard" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="SettingsDivider" Color="#0F000000" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="CardBackground" Color="#2B2B2B" />
+          <SolidColorBrush x:Key="CardStroke" Color="#1AFFFFFF" />
+          <SolidColorBrush x:Key="TrayGlassTint" Color="#B3202020" />
+          <SolidColorBrush x:Key="TraySolid" Color="#202020" />
+          <SolidColorBrush x:Key="TrayEdge" Color="#24FFFFFF" />
+          <SolidColorBrush x:Key="Fill08" Color="#14FFFFFF" />
+          <SolidColorBrush x:Key="Fill12" Color="#1FFFFFFF" />
+          <SolidColorBrush x:Key="TextPrimary" Color="#FFFFFFFF" />
+          <SolidColorBrush x:Key="TextSecondary" Color="#C5FFFFFF" />
+          <SolidColorBrush x:Key="TextTertiary" Color="#87FFFFFF" />
+          <SolidColorBrush x:Key="SettingsBackground" Color="#202020" />
+          <SolidColorBrush x:Key="SettingsCard" Color="#2B2B2B" />
+          <SolidColorBrush x:Key="SettingsDivider" Color="#15FFFFFF" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+      <SolidColorBrush x:Key="NoticeOrange" Color="#FF9500" />
+      <SolidColorBrush x:Key="NoticeBackground" Color="#24FF9500" />
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+
+    <Style Selector="Button.plain">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.plain:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Fill08}" />
+    </Style>
+    <Style Selector="Button.plain:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Fill12}" />
+    </Style>
+
+    <Style Selector="PathIcon">
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+    </Style>
+
+    <Style Selector="TextBlock.secondary">
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+    </Style>
+    <Style Selector="TextBlock.tertiary">
+      <Setter Property="Foreground" Value="{DynamicResource TextTertiary}" />
+    </Style>
+  </Application.Styles>
+</Application>

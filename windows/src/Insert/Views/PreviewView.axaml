@@ -1,0 +1,80 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:Insert.Views"
+             x:Class="Insert.Views.PreviewView"
+             x:DataType="v:PreviewViewModel">
+  <UserControl.DataTemplates>
+    <DataTemplate DataType="v:TextPreview">
+      <ScrollViewer>
+        <SelectableTextBlock Text="{Binding Text}" FontSize="13" LineHeight="20" TextWrapping="Wrap" Margin="16"
+                             Foreground="{DynamicResource TextPrimary}" />
+      </ScrollViewer>
+    </DataTemplate>
+    <DataTemplate DataType="v:ImagePreview">
+      <Image Source="{Binding Image}" Stretch="Uniform" Margin="12" RenderOptions.BitmapInterpolationMode="HighQuality" />
+    </DataTemplate>
+    <DataTemplate DataType="v:LinkPreview">
+      <StackPanel Spacing="10" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
+        <PathIcon Data="{StaticResource Icon.Link}" Width="30" Height="30" Foreground="{DynamicResource SystemAccentColor}" />
+        <TextBlock Text="{Binding Title}" FontSize="17" FontWeight="SemiBold" HorizontalAlignment="Center" TextAlignment="Center"
+                   TextWrapping="Wrap" Foreground="{DynamicResource TextPrimary}"
+                   IsVisible="{Binding Title, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <SelectableTextBlock Text="{Binding Url}" FontSize="14" TextAlignment="Center" TextWrapping="Wrap"
+                             Foreground="{DynamicResource TextSecondary}" />
+      </StackPanel>
+    </DataTemplate>
+    <DataTemplate DataType="v:FilesPreview">
+      <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Files}" Margin="16">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Spacing="10" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="v:FileRow">
+              <Grid ColumnDefinitions="32,*" ColumnSpacing="10">
+                <Image Source="{Binding Icon}" Width="32" Height="32" IsVisible="{Binding Icon, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <PathIcon Data="{Binding Glyph}" Width="24" Height="24" IsVisible="{Binding Icon, Converter={x:Static ObjectConverters.IsNull}}" />
+                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Medium" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimary}" />
+                  <TextBlock Text="{Binding Folder}" FontSize="11" Classes="secondary" TextTrimming="PrefixCharacterEllipsis" />
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </DataTemplate>
+    <DataTemplate DataType="v:ColorPreview">
+      <Border Background="{Binding Fill}">
+        <StackPanel Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <TextBlock Text="{Binding Hex}" FontSize="28" FontWeight="SemiBold" FontFamily="Cascadia Mono, Consolas, monospace"
+                     Foreground="{Binding Foreground}" HorizontalAlignment="Center" />
+          <TextBlock Text="{Binding Detail}" FontSize="14" FontWeight="Medium" FontFamily="Cascadia Mono, Consolas, monospace"
+                     Foreground="{Binding Foreground}" HorizontalAlignment="Center" />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+    <DataTemplate DataType="v:PlaceholderPreview">
+      <StackPanel Spacing="10" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <PathIcon Data="{Binding Glyph}" Width="44" Height="44" />
+        <TextBlock Text="{Binding Label}" FontSize="14" FontWeight="Medium" Classes="secondary" />
+      </StackPanel>
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
+  <Grid RowDefinitions="Auto,*" RowSpacing="12" Margin="22,18,22,6">
+    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+      <Image Source="{Binding AppIcon}" Width="28" Height="28" IsVisible="{Binding AppIcon, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+        <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimary}" />
+        <TextBlock Text="{Binding Detail}" FontSize="12" Classes="secondary" TextTrimming="CharacterEllipsis" />
+      </StackPanel>
+      <TextBlock Grid.Column="2" Text="Press Space to close" FontSize="11" Classes="tertiary" VerticalAlignment="Center" />
+    </Grid>
+    <Border Grid.Row="1" CornerRadius="10" ClipToBounds="True" Background="{DynamicResource CardBackground}">
+      <ContentControl Content="{Binding Body}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+    </Border>
+  </Grid>
+</UserControl>

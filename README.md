@@ -163,13 +163,33 @@ The Windows-specific repo is available at:
 
 https://github.com/KenWuqianghao/insert-windows
 
-The mirrored source under [`windows/Insert.Windows.sln`](./windows/Insert.Windows.sln) and [`windows/Insert.Windows`](./windows/Insert.Windows) is a native WinForms port with the same clipboard tray, search, hotkey, and persistent history model.
+The mirrored source is in [`windows/`](./windows). It is a C# and Avalonia app with the same tray, search, pinboards, preview, clip ring, and settings. The [Windows README](./windows/README.md) gives the install steps, the controls, and the known limits.
 
-Build it on Windows with the .NET 8 Windows Desktop workload installed:
+Version 2 replaces the WinForms version. It does not read the old history. The old file `%APPDATA%\Insert\ClipboardHistory.json` stays on disk. Delete it if you do not need it. If you turned on launch at login in the WinForms version, turn on **Open Insert at login** again in Settings.
+
+### Build from source
+
+You need the .NET 10 SDK. The commands work on Windows, macOS, and Linux.
 
 ```sh
-dotnet build windows/Insert.Windows.sln
+dotnet build windows/src/Insert
+dotnet test windows/tests/Insert.Core.Tests
+windows/tools/publish.sh
 ```
+
+`publish.sh` writes one zip for each of `win-x64` and `win-arm64` to `windows/dist/`. Each zip contains one self-contained `Insert.exe`.
+
+### Storage on Windows
+
+```text
+%LOCALAPPDATA%\Insert\
+├── index.json          # clip metadata and pinboards
+├── preferences.json    # settings
+├── payloads\           # one file for each clip, with all its clipboard formats
+└── thumbnails\         # one PNG for each image clip
+```
+
+Launch at login adds the value `Insert` to `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`.
 
 ## Linux
 
@@ -263,5 +283,3 @@ Insert keeps its data in a folder that has the name of the bundle id:
 Insert does not store an item that is larger than 50 MB.
 
 Version 0.2 does not read the history from version 0.1. The old file `~/Library/Application Support/Insert/ClipboardHistory.json` stays on disk. Delete it if you do not need it.
-
-Windows startup is stored in the current user's `Run` registry key and is toggled from the tray menu.
