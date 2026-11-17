@@ -36,6 +36,8 @@ final class ModifierHoldTrigger {
     private static let delay: TimeInterval = 0.3
     private static let pointerTolerance: CGFloat = 10
     private static let modifierMask: NSEvent.ModifierFlags = [.command, .option, .control, .shift, .function]
+    /// From kVK_RightCommand to kVK_Function, including Caps Lock.
+    private static let modifierKeyCodes = 0x36...0x3F
     /// Media and brightness keys come as system-defined events. CGEventType has no case for them.
     private static let systemDefined = CGEventType(rawValue: 14)!
     private static let interruptions: [CGEventType] = [
@@ -187,10 +189,19 @@ final class ModifierHoldTrigger {
         guard case .waiting(let start, _) = state else { return }
         let pointer = NSEvent.mouseLocation
         let isStill = hypot(pointer.x - start.x, pointer.y - start.y) <= Self.pointerTolerance
-        let isAlone = NSEvent.modifierFlags.intersection(Self.modifierMask) == modifier.flag && NSEvent.pressedMouseButtons == 0
+        let isAlone = NSEvent.modifierFlags.intersection(Self.modifierMask) == modifier.flag
+            && NSEvent.pressedMouseButtons == 0
+            && !Self.otherKeyIsDown()
         // In secure input, such as a password field, the tap gets no key presses.
         let canOpen = isStill && isAlone && !IsSecureEventInputEnabled() && !Self.menuIsOpen()
         state = canOpen && onHold() ? .holding : .idle
+    }
+
+    /// A key that was down before the modifier sends no key press during the wait.
+    private static func otherKeyIsDown() -> Bool {
+        (0..<128).contains { code in
+            !modifierKeyCodes.contains(code) && CGEventSource.keyState(.combinedSessionState, key: CGKeyCode(code))
+        }
     }
 
     /// Some apps keep a clear window on the menu level at all times, so only visible windows count.
