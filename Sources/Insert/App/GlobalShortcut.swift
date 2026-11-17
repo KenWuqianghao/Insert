@@ -7,16 +7,10 @@ struct GlobalShortcut: Equatable {
     let carbonModifiers: UInt32
     let displayName: String
 
-    static let trayDefault = GlobalShortcut(
+    static let defaultShortcut = GlobalShortcut(
         keyCode: UInt32(kVK_ANSI_V),
         carbonModifiers: UInt32(cmdKey | shiftKey),
         displayName: "⇧⌘V"
-    )
-
-    static let ringDefault = GlobalShortcut(
-        keyCode: UInt32(kVK_ANSI_V),
-        carbonModifiers: UInt32(controlKey | optionKey),
-        displayName: "⌃⌥V"
     )
 
     init(keyCode: UInt32, carbonModifiers: UInt32, displayName: String) {
@@ -38,10 +32,10 @@ struct GlobalShortcut: Equatable {
         self.displayName = Self.displayName(carbonModifiers: carbonModifiers, keyName: keyName)
     }
 
-    init(defaults: UserDefaults, prefix: String, fallback: GlobalShortcut) {
-        let keyCode = defaults.object(forKey: prefix + Keys.keyCode) as? Int
-        let modifiers = defaults.object(forKey: prefix + Keys.modifiers) as? Int
-        let displayName = defaults.string(forKey: prefix + Keys.displayName)
+    init(defaults: UserDefaults) {
+        let keyCode = defaults.object(forKey: Keys.keyCode) as? Int
+        let modifiers = defaults.object(forKey: Keys.modifiers) as? Int
+        let displayName = defaults.string(forKey: Keys.displayName)
 
         guard
             let keyCode,
@@ -51,7 +45,7 @@ struct GlobalShortcut: Equatable {
             modifiers > 0,
             !displayName.isEmpty
         else {
-            self = fallback
+            self = .defaultShortcut
             return
         }
 
@@ -60,10 +54,10 @@ struct GlobalShortcut: Equatable {
         self.displayName = displayName
     }
 
-    func save(to defaults: UserDefaults, prefix: String) {
-        defaults.set(Int(keyCode), forKey: prefix + Keys.keyCode)
-        defaults.set(Int(carbonModifiers), forKey: prefix + Keys.modifiers)
-        defaults.set(displayName, forKey: prefix + Keys.displayName)
+    func save(to defaults: UserDefaults) {
+        defaults.set(Int(keyCode), forKey: Keys.keyCode)
+        defaults.set(Int(carbonModifiers), forKey: Keys.modifiers)
+        defaults.set(displayName, forKey: Keys.displayName)
     }
 
     private static func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {
@@ -137,8 +131,8 @@ struct GlobalShortcut: Equatable {
     }
 
     private enum Keys {
-        static let keyCode = ".keyCode"
-        static let modifiers = ".modifiers"
-        static let displayName = ".displayName"
+        static let keyCode = "hotKey.keyCode"
+        static let modifiers = "hotKey.modifiers"
+        static let displayName = "hotKey.displayName"
     }
 }
