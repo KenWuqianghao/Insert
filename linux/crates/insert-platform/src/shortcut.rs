@@ -7,31 +7,68 @@ use futures_lite::{future, stream, Stream, StreamExt};
 
 use crate::portal;
 
-pub const SHORTCUT_ID: &str = "toggle-tray";
-pub const SHORTCUT_DESCRIPTION: &str = "Show or hide Insert";
-pub const PREFERRED_TRIGGER: &str = "CTRL+SHIFT+V";
+/// The shortcuts that Insert binds, all in one portal session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ShortcutId {
+    ToggleTray,
+    /// Hold to open the clip ring. Release to paste the selected clip.
+    ClipRing,
+}
+
+impl ShortcutId {
+    pub const ALL: [Self; 2] = [Self::ToggleTray, Self::ClipRing];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::ToggleTray => "toggle-tray",
+            Self::ClipRing => "clip-ring",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::ToggleTray => "Show or hide Insert",
+            Self::ClipRing => "Hold to open the clip ring",
+        }
+    }
+
+    pub fn preferred_trigger(self) -> &'static str {
+        match self {
+            Self::ToggleTray => "CTRL+SHIFT+V",
+            Self::ClipRing => "CTRL+ALT+V",
+        }
+    }
+
+    fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|shortcut| shortcut.id() == id)
+    }
+}
+
 /// `ConfigureShortcuts` exists from this version of the portal interface.
 const CONFIGURE_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ShortcutEvent {
     /// The user pressed the shortcut. Pass the token to the window that the app presents.
-    Activated { activation_token: Option<String> },
+    /// Key autorepeat can send this again while the user holds the keys.
+    Activated { id: ShortcutId, activation_token: Option<String> },
+    /// The user released the shortcut.
+    Deactivated(ShortcutId),
     /// The trigger in the form that the desktop shows to the user. Empty when no key is assigned.
-    TriggerChanged(String),
+    TriggerChanged { id: ShortcutId, trigger: String },
     /// The portal closed the session. No more events follow.
     Unavailable(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ShortcutError {
-    #[error("the global shortcut is not available: {0}")]
+    #[error("the global shortcuts are not available: {0}")]
     Unavailable(String),
     #[error("this desktop cannot open its shortcut settings for the app")]
     ConfigureNotSupported,
 }
 
-/// A bound shortcut. Drop it to release the shortcut.
+/// The bound shortcuts. Drop it to release them.
 pub struct GlobalShortcut {
     portal: GlobalShortcuts,
     session: Arc<Session<GlobalShortcuts>>,
@@ -39,34 +76,42 @@ pub struct GlobalShortcut {
 }
 
 impl GlobalShortcut {
-    /// Binds the shortcut and starts a listener thread that sends to `events`.
-    /// The first event is `TriggerChanged` with the trigger that the desktop assigned.
-    /// The desktop can show a dialog the first time.
+    /// Binds all shortcuts of `ShortcutId::ALL` and starts a listener thread that sends to `events`.
+    /// The first events are one `TriggerChanged` for each shortcut, with the trigger that the desktop
+    /// assigned. The desktop can show a dialog the first time.
     pub async fn connect(events: async_channel::Sender<ShortcutEvent>) -> Result<Self, ShortcutError> {
         portal::register_app().await;
         let portal = GlobalShortcuts::new().await.map_err(unavailable)?;
         let session = Arc::new(portal.create_session(Default::default()).await.map_err(unavailable)?);
 
         let activated = portal.receive_activated().await.map_err(unavailable)?;
+        let deactivated = portal.receive_deactivated().await.map_err(unavailable)?;
         let changed = portal.receive_shortcuts_changed().await.map_err(unavailable)?;
 
-        let shortcut = NewShortcut::new(SHORTCUT_ID, SHORTCUT_DESCRIPTION).preferred_trigger(PREFERRED_TRIGGER);
+        let shortcuts = ShortcutId::ALL
+            .map(|id| NewShortcut::new(id.id(), id.description()).preferred_trigger(id.preferred_trigger()));
         let bound = portal
-            .bind_shortcuts(&session, &[shortcut], None, Default::default())
+            .bind_shortcuts(&session, &shortcuts, None, Default::default())
             .await
             .and_then(|request| request.response())
             .map_err(unavailable)?;
-        let _ = events.send(ShortcutEvent::TriggerChanged(trigger_of(bound.shortcuts()))).await;
+        for event in triggers_of(bound.shortcuts()) {
+            let _ = events.send(event).await;
+        }
 
-        let signals: Signals = Box::pin(stream::or(
-            activated.filter(|signal| signal.shortcut_id() == SHORTCUT_ID).map(|signal| ShortcutEvent::Activated {
+        let activated = activated.filter_map(|signal| {
+            Some(ShortcutEvent::Activated {
+                id: ShortcutId::from_id(signal.shortcut_id())?,
                 activation_token: signal
                     .options()
                     .get("activation_token")
                     .and_then(|value| value.downcast_ref::<String>().ok()),
-            }),
-            changed.map(|signal| ShortcutEvent::TriggerChanged(trigger_of(signal.shortcuts()))),
-        ));
+            })
+        });
+        let deactivated = deactivated
+            .filter_map(|signal| ShortcutId::from_id(signal.shortcut_id()).map(ShortcutEvent::Deactivated));
+        let changed = changed.flat_map(|signal| stream::iter(triggers_of(signal.shortcuts())));
+        let signals: Signals = Box::pin(stream::or(stream::or(activated, deactivated), changed));
         let (stop, stopped) = async_channel::bounded::<()>(1);
         std::thread::Builder::new()
             .name("insert-shortcut".into())
@@ -82,7 +127,7 @@ impl GlobalShortcut {
         self.portal.version() >= CONFIGURE_VERSION
     }
 
-    /// Opens the desktop's dialog to change the trigger. The new trigger arrives as `TriggerChanged`.
+    /// Opens the desktop's dialog to change the triggers. The new triggers arrive as `TriggerChanged`.
     pub async fn configure(&self) -> Result<(), ShortcutError> {
         if !self.can_configure() {
             return Err(ShortcutError::ConfigureNotSupported);
@@ -132,12 +177,19 @@ async fn listen(
     let _ = session.close().await;
 }
 
-fn trigger_of(shortcuts: &[Shortcut]) -> String {
-    shortcuts
-        .iter()
-        .find(|shortcut| shortcut.id() == SHORTCUT_ID)
-        .map(|shortcut| shortcut.trigger_description().to_owned())
-        .unwrap_or_default()
+/// One event for each shortcut of Insert. A shortcut that `shortcuts` does not list has no trigger.
+fn triggers_of(shortcuts: &[Shortcut]) -> Vec<ShortcutEvent> {
+    ShortcutId::ALL
+        .into_iter()
+        .map(|id| ShortcutEvent::TriggerChanged {
+            id,
+            trigger: shortcuts
+                .iter()
+                .find(|shortcut| shortcut.id() == id.id())
+                .map(|shortcut| shortcut.trigger_description().to_owned())
+                .unwrap_or_default(),
+        })
+        .collect()
 }
 
 fn unavailable(error: ashpd::Error) -> ShortcutError {

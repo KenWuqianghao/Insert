@@ -188,12 +188,19 @@ impl App {
     }
 
     pub fn activate(self: &Rc<Self>, id: ClipId, action: PasteAction) {
-        let payload = self.library.borrow().payload(id);
-        let Ok(payload) = payload else {
-            self.hide_tray(None);
-            WidgetExt::display(&self.tray.window).beep();
-            return;
-        };
+        match self.copy_clip(id, action) {
+            Ok(paste) => self.hide_tray(paste.then_some(Paste)),
+            Err(()) => {
+                self.hide_tray(None);
+                WidgetExt::display(&self.tray.window).beep();
+            }
+        }
+    }
+
+    /// Puts the clip on the clipboard and moves it to the front of the history. Returns true when the
+    /// caller must paste it into the front app, and an error when the clip cannot be read.
+    pub fn copy_clip(self: &Rc<Self>, id: ClipId, action: PasteAction) -> Result<bool, ()> {
+        let payload = self.library.borrow().payload(id).map_err(|_| ())?;
         let offer = match (action, payload.plain_text()) {
             (PasteAction::PastePlainText, Some(text)) => MimeMap::from_plain_text(&text),
             _ => payload.for_clipboard(),
@@ -204,11 +211,10 @@ impl App {
         }
         let change = self.library.borrow_mut().move_to_front(id, OffsetDateTime::now_utc());
         self.apply(change);
-        let paste = copied.is_ok()
+        Ok(copied.is_ok()
             && action != PasteAction::Copy
             && self.prefs.borrow().paste_directly
-            && self.services.paste_status() == PasteStatus::Ready;
-        self.hide_tray(paste.then_some(Paste));
+            && self.services.paste_status() == PasteStatus::Ready)
     }
 
     fn delete(self: &Rc<Self>, ids: HashSet<ClipId>) {

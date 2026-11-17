@@ -1,9 +1,11 @@
-//! Binds the global shortcut and prints its events. `shortcut_probe configure` also opens the settings dialog.
+//! Binds the global shortcuts and prints their events with the time since the start.
+//! `shortcut_probe configure` also opens the settings dialog.
 
 use insert_platform::shortcut::GlobalShortcut;
 
 fn main() {
     let configure = std::env::args().nth(1).as_deref() == Some("configure");
+    let start = std::time::Instant::now();
     let (sender, receiver) = async_channel::unbounded();
     futures_lite::future::block_on(async {
         let shortcut = match GlobalShortcut::connect(sender).await {
@@ -18,7 +20,7 @@ fn main() {
             println!("configure: {:?}", shortcut.configure().await);
         }
         while let Ok(event) = receiver.recv().await {
-            println!("{event:?}");
+            println!("{:>6} ms {event:?}", start.elapsed().as_millis());
         }
     });
 }

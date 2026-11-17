@@ -3,6 +3,7 @@ use std::rc::Rc;
 use gtk4 as gtk;
 use gtk::{gio, glib, prelude::*};
 use insert_core::MimeMap;
+use insert_platform::shortcut::ShortcutId;
 
 use crate::app::App;
 use crate::services::ServiceEvent;
@@ -53,6 +54,22 @@ pub fn install(app: &Rc<App>) {
         });
     }));
     app.gtk_app.add_action(&capture);
+
+    // Sends what the shortcut portal sends: "clip-ring:press" or "clip-ring:release".
+    let shortcut = gio::SimpleAction::new("test-shortcut", Some(glib::VariantTy::STRING));
+    shortcut.connect_activate(with_app!(&weak => app, |_, param| {
+        let Some(spec) = param.and_then(|p| p.str()) else { return };
+        let event = match spec {
+            "clip-ring:press" => ServiceEvent::ShortcutActivated { id: ShortcutId::ClipRing, activation_token: None },
+            "clip-ring:release" => ServiceEvent::ShortcutReleased(ShortcutId::ClipRing),
+            _ => {
+                eprintln!("insert: test-shortcut: unknown event {spec}");
+                return;
+            }
+        };
+        app.on_service_event(event);
+    }));
+    app.gtk_app.add_action(&shortcut);
 
     let action = gio::SimpleAction::new("test-action", Some(glib::VariantTy::STRING));
     action.connect_activate(with_app!(&weak => app, |_, param| {
