@@ -1,5 +1,6 @@
 mod app;
 mod appicon;
+mod ring;
 mod services;
 mod settings;
 #[cfg(feature = "test-hooks")]

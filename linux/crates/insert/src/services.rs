@@ -1,4 +1,5 @@
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -11,7 +12,7 @@ use insert_platform::autostart::{self, Autostart};
 use insert_platform::clipboard::{ClipboardConfig, ClipboardEvent, ClipboardWatcher};
 use insert_platform::paste::{PasteError, PasteInjector, PasteKeys};
 use insert_platform::portal;
-use insert_platform::shortcut::{GlobalShortcut, ShortcutEvent};
+use insert_platform::shortcut::{GlobalShortcut, ShortcutEvent, ShortcutId};
 use insert_platform::tray_icon::{TrayEvent, TrayIcon};
 
 use crate::tray::WINDOW_TITLE;
@@ -45,8 +46,10 @@ pub struct StatusIcon {
 pub enum ServiceEvent {
     /// `copied_at` is when the clipboard changed, before Insert read the offer.
     ClipboardChanged { offer: MimeMap, copied_at: Instant },
-    ShortcutActivated { activation_token: Option<String> },
-    ShortcutChanged(Shortcut),
+    ShortcutActivated { id: ShortcutId, activation_token: Option<String> },
+    ShortcutReleased(ShortcutId),
+    /// Read the new state with `Services::shortcut`.
+    ShortcutsChanged,
     PasteStatusChanged(PasteStatus),
     CaptureUnavailable,
     StatusMenu(TrayEvent),
@@ -67,7 +70,8 @@ struct Inner {
     restore_token_file: PathBuf,
     paste_status: Cell<PasteStatus>,
     global_shortcut: RefCell<Option<Rc<GlobalShortcut>>>,
-    shortcut: RefCell<Shortcut>,
+    /// A shortcut with no entry is `Shortcut::Unavailable`.
+    shortcuts: RefCell<HashMap<ShortcutId, Shortcut>>,
     active_app: RefCell<Option<Rc<ActiveAppTracker>>>,
     autostart: Option<Autostart>,
     status_icon: RefCell<Option<TrayIcon>>,
@@ -97,7 +101,7 @@ impl Services {
             restore_token_file: paths.restore_token_file(),
             paste_status: Cell::new(PasteStatus::NeedsPermission),
             global_shortcut: RefCell::new(None),
-            shortcut: RefCell::new(Shortcut::Unavailable),
+            shortcuts: RefCell::new(HashMap::new()),
             active_app: RefCell::new(None),
             autostart: Autostart::for_user(),
             status_icon: RefCell::new(None),
@@ -225,8 +229,8 @@ impl Services {
         result.map_err(|error| format!("Insert cannot change {}: {error}", autostart.path().display()))
     }
 
-    pub fn shortcut(&self) -> Shortcut {
-        self.inner.shortcut.borrow().clone()
+    pub fn shortcut(&self, id: ShortcutId) -> Shortcut {
+        self.inner.shortcuts.borrow().get(&id).cloned().unwrap_or(Shortcut::Unavailable)
     }
 
     pub fn change_shortcut(&self) {
@@ -291,23 +295,26 @@ impl Inner {
         let can_change = shortcut.can_configure();
         *self.global_shortcut.borrow_mut() = Some(shortcut);
         while let Ok(event) = events.recv().await {
-            let state = match event {
-                ShortcutEvent::Activated { activation_token } => {
-                    self.emit(ServiceEvent::ShortcutActivated { activation_token });
-                    continue;
+            match event {
+                ShortcutEvent::Activated { id, activation_token } => {
+                    self.emit(ServiceEvent::ShortcutActivated { id, activation_token });
                 }
-                ShortcutEvent::TriggerChanged(trigger) => Shortcut::Registered {
-                    trigger: Some(trigger).filter(|trigger| !trigger.is_empty()),
-                    can_change,
-                },
+                ShortcutEvent::Deactivated(id) => self.emit(ServiceEvent::ShortcutReleased(id)),
+                ShortcutEvent::TriggerChanged { id, trigger } => {
+                    let state = Shortcut::Registered {
+                        trigger: Some(trigger).filter(|trigger| !trigger.is_empty()),
+                        can_change,
+                    };
+                    self.shortcuts.borrow_mut().insert(id, state);
+                    self.emit(ServiceEvent::ShortcutsChanged);
+                }
                 ShortcutEvent::Unavailable(reason) => {
-                    eprintln!("insert: the global shortcut stopped: {reason}");
+                    eprintln!("insert: the global shortcuts stopped: {reason}");
                     self.global_shortcut.borrow_mut().take();
-                    Shortcut::Unavailable
+                    self.shortcuts.borrow_mut().clear();
+                    self.emit(ServiceEvent::ShortcutsChanged);
                 }
-            };
-            *self.shortcut.borrow_mut() = state.clone();
-            self.emit(ServiceEvent::ShortcutChanged(state));
+            }
         }
     }
 

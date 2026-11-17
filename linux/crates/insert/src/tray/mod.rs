@@ -1,4 +1,4 @@
-mod card;
+pub mod card;
 mod control;
 mod keys;
 mod menus;

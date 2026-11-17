@@ -18,7 +18,7 @@ On GNOME, Insert cannot watch the clipboard, because GNOME does not have the dat
 1. Download `insert-linux-x86_64.tar.gz` from the [latest release](https://github.com/KenWuqianghao/insert-linux/releases/latest).
 2. Extract the archive and run `./install.sh`. Root access is not necessary.
 3. Start **Insert** from the application menu. Insert opens no window. Its icon appears in the system tray.
-4. Plasma asks for the global shortcut. Click **OK** to accept `Ctrl+Shift+V`.
+4. Plasma asks for the global shortcuts. Click **OK** to accept `Ctrl+Shift+V` and `Ctrl+Alt+V`.
 5. Copy some text, then press `Ctrl+Shift+V`. The tray opens.
 6. Click **Allow…** in the tray notice. Plasma asks to let Insert control input devices. Click **Approve**. After this, `Return` pastes the selected clip into the app in front.
 
@@ -39,8 +39,21 @@ To remove Insert, run `./install.sh --uninstall`. Your clips and your settings s
 | Search | Type in the tray |
 | Close | `Esc` |
 | Open Settings | `Ctrl+,` |
+| Open the clip ring | Hold `Ctrl+Alt+V` |
 
-If your desktop has no global shortcut service, bind `~/.local/bin/insert --toggle` to a key in the desktop settings.
+If your desktop has no global shortcut service, bind `~/.local/bin/insert --toggle` to a key in the desktop settings. The clip ring needs the global shortcut service.
+
+## Clip ring
+
+The clip ring shows your 8 newest clips around the pointer. Each segment shows the icon of the app that the clip came from.
+
+1. Hold `Ctrl+Alt+V`. The ring opens at the pointer.
+2. Move the pointer toward a clip. The segment of the clip becomes lighter, and a preview of the clip appears.
+3. Release the keys. Insert pastes the clip into the app in front.
+
+If you release the keys while the pointer is in the center, the ring stays open. Click a clip to paste it. To close the ring with no paste, press `Esc` or click outside the ring.
+
+To change the shortcut, open Settings and click **Change…** in the row "Hold to open the clip ring".
 
 ## Build from source
 

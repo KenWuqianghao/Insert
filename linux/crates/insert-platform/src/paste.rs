@@ -13,6 +13,10 @@ const KEYSYM_CONTROL_L: i32 = 0xffe3;
 const KEYSYM_CONTROL_R: i32 = 0xffe4;
 const KEYSYM_SHIFT_L: i32 = 0xffe1;
 const KEYSYM_SHIFT_R: i32 = 0xffe2;
+const KEYSYM_ALT_L: i32 = 0xffe9;
+const KEYSYM_ALT_R: i32 = 0xffea;
+const KEYSYM_SUPER_L: i32 = 0xffeb;
+const KEYSYM_SUPER_R: i32 = 0xffec;
 const KEYSYM_V: i32 = 0x0076;
 const KEYSYM_INSERT: i32 = 0xff63;
 
@@ -101,9 +105,19 @@ impl PasteInjector {
         let (modifier, key) = keys.keysyms();
         // The user can still hold Shift from Shift+Return. With it, Ctrl+V becomes Ctrl+Shift+V, the shortcut
         // that opens Insert again. The user can also still hold Ctrl from Ctrl+1, and Ctrl+Shift+Insert is not
-        // a paste in a terminal.
-        let release = [KEYSYM_SHIFT_L, KEYSYM_SHIFT_R, KEYSYM_CONTROL_L, KEYSYM_CONTROL_R]
-            .map(|keysym| (keysym, KeyState::Released));
+        // a paste in a terminal. The clip ring pastes 1 s after the release of its shortcut at the latest, and
+        // the user can still hold a key of that shortcut, such as Alt or Super.
+        let release = [
+            KEYSYM_SHIFT_L,
+            KEYSYM_SHIFT_R,
+            KEYSYM_CONTROL_L,
+            KEYSYM_CONTROL_R,
+            KEYSYM_ALT_L,
+            KEYSYM_ALT_R,
+            KEYSYM_SUPER_L,
+            KEYSYM_SUPER_R,
+        ]
+        .map(|keysym| (keysym, KeyState::Released));
         let paste = [
             (modifier, KeyState::Pressed),
             (key, KeyState::Pressed),

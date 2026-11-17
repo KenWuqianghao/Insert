@@ -4,6 +4,7 @@ use std::rc::Rc;
 use gtk4 as gtk;
 use gtk::{gio, glib, prelude::*};
 use insert_core::{HistoryLimit, SourceApp};
+use insert_platform::shortcut::ShortcutId;
 
 use crate::app::App;
 use crate::appicon::{desktop_app, desktop_id};
@@ -22,9 +23,8 @@ pub struct SettingsWindow {
     login: gtk::Switch,
     login_warning: Warning,
     tray_icon: gtk::Switch,
-    shortcut_value: gtk::Label,
-    shortcut_change: gtk::Button,
-    shortcut_row: Row,
+    tray_shortcut: ShortcutRow,
+    ring_shortcut: ShortcutRow,
     paste: gtk::Switch,
     paste_warning: Warning,
     paste_allow: gtk::Button,
@@ -91,13 +91,8 @@ impl SettingsWindow {
         let login = gtk::Switch::new();
         let login_warning = Warning::new("");
         let tray_icon = gtk::Switch::new();
-        let shortcut_value = gtk::Label::new(None);
-        shortcut_value.add_css_class("keycap");
-        let shortcut_change = gtk::Button::with_label("Change…");
-        let shortcut_controls = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        shortcut_controls.append(&shortcut_value);
-        shortcut_controls.append(&shortcut_change);
-        let shortcut_row = Row::new("Shortcut to open Insert", Some(""), &shortcut_controls);
+        let tray_shortcut = ShortcutRow::new(ShortcutId::ToggleTray, "Shortcut to open Insert");
+        let ring_shortcut = ShortcutRow::new(ShortcutId::ClipRing, "Hold to open the clip ring");
         let paste = gtk::Switch::new();
         let paste_warning = Warning::new("");
         let paste_allow = gtk::Button::with_label("Allow…");
@@ -112,7 +107,7 @@ impl SettingsWindow {
             login_warning.root.clone().upcast(),
             Row::new("Show the icon in the system tray", None, &tray_icon).root,
         ]));
-        general.append(&group_of(&[shortcut_row.root.clone()]));
+        general.append(&group_of(&[tray_shortcut.row.root.clone(), ring_shortcut.row.root.clone()]));
         general.append(&group_of(&[
             Row::new(
                 "Paste directly into the active app",
@@ -179,9 +174,8 @@ impl SettingsWindow {
             login,
             login_warning,
             tray_icon,
-            shortcut_value,
-            shortcut_change,
-            shortcut_row,
+            tray_shortcut,
+            ring_shortcut,
             paste,
             paste_warning,
             paste_allow,
@@ -208,9 +202,10 @@ impl SettingsWindow {
                 app.set_show_tray_icon(switch.is_active());
             }
         }));
-        settings
-            .shortcut_change
-            .connect_clicked(with_app!(&weak => app, |_| app.services.change_shortcut()));
+        for row in [&settings.tray_shortcut, &settings.ring_shortcut] {
+            row.change
+                .connect_clicked(with_app!(&weak => app, |_| app.services.change_shortcut()));
+        }
         let this = Rc::downgrade(&settings);
         settings.paste.connect_active_notify(with_app!(&weak => app, |switch| {
             if this.upgrade().is_some_and(|this| !this.updating.get()) {
@@ -270,26 +265,8 @@ impl SettingsWindow {
             .unwrap_or(1);
         self.limit.set_selected(index as u32);
 
-        match &*app.shortcut.borrow() {
-            Shortcut::Registered { trigger, can_change } => {
-                self.shortcut_value
-                    .set_text(trigger.as_deref().unwrap_or("Not set"));
-                self.shortcut_value.set_visible(true);
-                self.shortcut_change.set_visible(*can_change);
-                self.shortcut_row.set_description(if *can_change {
-                    None
-                } else {
-                    Some("Change it in System Settings > Keyboard > Shortcuts.")
-                });
-            }
-            Shortcut::Unavailable => {
-                self.shortcut_value.set_visible(false);
-                self.shortcut_change.set_visible(false);
-                self.shortcut_row.set_description(Some(
-                    "This desktop has no shortcut service. Bind the command \"insert --toggle\" to a key in the desktop settings.",
-                ));
-            }
-        }
+        self.tray_shortcut.refresh(app);
+        self.ring_shortcut.refresh(app);
 
         match (prefs.paste_directly, app.paste_status.get()) {
             (true, PasteStatus::NeedsPermission) => {
@@ -315,6 +292,50 @@ impl SettingsWindow {
             self.ignored_rows.append(&ignored_row(app, ignored));
         }
         self.updating.set(false);
+    }
+}
+
+struct ShortcutRow {
+    id: ShortcutId,
+    row: Row,
+    value: gtk::Label,
+    change: gtk::Button,
+}
+
+impl ShortcutRow {
+    fn new(id: ShortcutId, title: &str) -> Self {
+        let value = gtk::Label::new(None);
+        value.add_css_class("keycap");
+        let change = gtk::Button::with_label("Change…");
+        let controls = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        controls.append(&value);
+        controls.append(&change);
+        Self { id, row: Row::new(title, Some(""), &controls), value, change }
+    }
+
+    fn refresh(&self, app: &App) {
+        match app.services.shortcut(self.id) {
+            Shortcut::Registered { trigger, can_change } => {
+                self.value.set_text(trigger.as_deref().unwrap_or("Not set"));
+                self.value.set_visible(true);
+                self.change.set_visible(can_change);
+                self.row.set_description(if can_change {
+                    None
+                } else {
+                    Some("Change it in System Settings > Keyboard > Shortcuts.")
+                });
+            }
+            Shortcut::Unavailable => {
+                self.value.set_visible(false);
+                self.change.set_visible(false);
+                self.row.set_description(Some(match self.id {
+                    ShortcutId::ToggleTray => {
+                        "This desktop has no shortcut service. Bind the command \"insert --toggle\" to a key in the desktop settings."
+                    }
+                    ShortcutId::ClipRing => "This desktop has no shortcut service. The clip ring needs one.",
+                }));
+            }
+        }
     }
 }
 

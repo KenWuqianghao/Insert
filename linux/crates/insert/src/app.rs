@@ -7,10 +7,12 @@ use gtk::{gio, glib, prelude::*};
 use insert_core::{
     classify, Capture, Change, HistoryLimit, Library, MimeMap, Paths, Preferences, Skip, SourceApp, Storage,
 };
+use insert_platform::shortcut::ShortcutId;
 use insert_platform::tray_icon::TrayEvent;
 use time::OffsetDateTime;
 
-use crate::services::{PasteStatus, ServiceEvent, Services, Shortcut, StatusIcon};
+use crate::ring::RingWindow;
+use crate::services::{PasteStatus, ServiceEvent, Services, StatusIcon};
 use crate::settings::SettingsWindow;
 use crate::tray::{Notices, Tray};
 
@@ -31,6 +33,7 @@ pub struct App {
     pub prefs: RefCell<Preferences>,
     paths: Paths,
     pub tray: Tray,
+    pub ring: RingWindow,
     settings: RefCell<Option<Rc<SettingsWindow>>>,
     captures: async_channel::Sender<(MimeMap, Option<SourceApp>)>,
     save_timer: RefCell<Option<glib::SourceId>>,
@@ -38,7 +41,6 @@ pub struct App {
     pub library_notice: Cell<bool>,
     pub capture_notice: Cell<bool>,
     pub paste_status: Cell<PasteStatus>,
-    pub shortcut: RefCell<Shortcut>,
 }
 
 impl App {
@@ -56,12 +58,12 @@ impl App {
         let app = Rc::new_cyclic(|weak| App {
             gtk_app: gtk_app.clone(),
             paste_status: Cell::new(services.paste_status()),
-            shortcut: RefCell::new(services.shortcut()),
             services,
             library: RefCell::new(opened.library),
             prefs: RefCell::new(prefs),
             paths,
             tray: Tray::new(weak, gtk_app),
+            ring: RingWindow::new(weak, gtk_app),
             settings: RefCell::new(None),
             captures,
             save_timer: RefCell::new(None),
@@ -105,13 +107,15 @@ impl App {
     pub fn on_service_event(self: &Rc<Self>, event: ServiceEvent) {
         match event {
             ServiceEvent::ClipboardChanged { offer, copied_at } => self.capture(offer, copied_at),
-            ServiceEvent::ShortcutActivated { activation_token } => {
+            ServiceEvent::ShortcutActivated { id: ShortcutId::ToggleTray, activation_token } => {
                 self.toggle_tray(activation_token.as_deref())
             }
-            ServiceEvent::ShortcutChanged(shortcut) => {
-                *self.shortcut.borrow_mut() = shortcut;
-                self.refresh_settings();
+            ServiceEvent::ShortcutActivated { id: ShortcutId::ClipRing, activation_token } => {
+                self.open_ring(activation_token.as_deref())
             }
+            ServiceEvent::ShortcutReleased(ShortcutId::ClipRing) => self.release_ring(),
+            ServiceEvent::ShortcutReleased(ShortcutId::ToggleTray) => {}
+            ServiceEvent::ShortcutsChanged => self.refresh_settings(),
             ServiceEvent::PasteStatusChanged(status) => {
                 self.paste_status.set(status);
                 self.render_tray();
