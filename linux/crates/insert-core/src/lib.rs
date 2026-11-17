@@ -5,6 +5,7 @@ pub mod library;
 pub mod mime;
 pub mod model;
 pub mod prefs;
+pub mod ring;
 pub mod selection;
 pub mod storage;
 pub mod tint;
@@ -25,6 +26,7 @@ pub use model::{
     PinboardId, PixelSize, Rgb, SourceApp, TextSnippet,
 };
 pub use prefs::{HistoryLimit, Preferences};
+pub use ring::{Bounds, Point, Ring, RING_CAPACITY};
 pub use selection::Selection;
 pub use storage::{LibraryIndex, LoadedIndex, Paths, Storage};
 pub use tint::{header_tint, NEUTRAL_TINT};
