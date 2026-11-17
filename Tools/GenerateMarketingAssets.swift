@@ -338,6 +338,7 @@ private final class Director {
         addStep(animates: true)
         showRing()
         await pause(0.8)
+        addStep(animates: true)
         await glidePointer(to: ringIconPoint(), duration: 0.4)
         await pause(1.4)
         cue(["⌥"], "Release to paste", for: 1.4, animates: true)
