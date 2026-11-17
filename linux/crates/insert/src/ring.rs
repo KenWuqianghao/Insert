@@ -56,6 +56,8 @@ pub struct RingWindow {
     age: gtk::Label,
     preview: RefCell<Option<(ClipId, gtk::Widget)>>,
     state: RefCell<RingState>,
+    /// The wait for the modifier keys after a release. `hide` removes it, so it cannot end a later release.
+    release_timer: RefCell<Option<glib::SourceId>>,
     app: Weak<App>,
 }
 
@@ -109,6 +111,7 @@ impl RingWindow {
             age,
             preview: RefCell::new(None),
             state: RefCell::new(RingState::Hidden),
+            release_timer: RefCell::new(None),
             app: app.clone(),
         };
         ring.connect(app);
@@ -183,6 +186,9 @@ impl RingWindow {
     }
 
     fn hide(&self) {
+        if let Some(timer) = self.release_timer.take() {
+            timer.remove();
+        }
         if matches!(self.state.replace(RingState::Hidden), RingState::Hidden) {
             return;
         }
@@ -359,8 +365,13 @@ impl App {
         match &mut *state {
             RingState::Hidden => {}
             RingState::Placing => {
+                // Before the first layout the surface is 0×0. The next tick or pointer event tries again.
+                let bounds = self.ring.bounds();
+                if bounds.width <= 0.0 || bounds.height <= 0.0 {
+                    return;
+                }
                 let clips = library.clips().iter().map(|clip| clip.id);
-                if let Some(ring) = Ring::open(clips, pointer, self.ring.bounds()) {
+                if let Some(ring) = Ring::open(clips, pointer, bounds) {
                     *state = RingState::Open(ring);
                     drop(state);
                     self.ring.render_open(&library);
@@ -395,11 +406,13 @@ impl App {
         self.ring.canvas.add_css_class("closing");
         if self.ring.modifiers_held() {
             let app = Rc::downgrade(self);
-            glib::timeout_add_local_once(RELEASE_TIMEOUT, move || {
+            let timer = glib::timeout_add_local_once(RELEASE_TIMEOUT, move || {
                 if let Some(app) = app.upgrade() {
+                    app.ring.release_timer.take();
                     app.finish_ring_release();
                 }
             });
+            self.ring.release_timer.replace(Some(timer));
         } else {
             self.finish_ring_release();
         }
