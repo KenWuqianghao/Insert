@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var monitor: ClipboardMonitor?
     private var panelController: PanelController?
     private var ringController: RingController?
+    private var ringTrigger: ModifierHoldTrigger?
     private var settingsController: SettingsWindowController?
     private var statusItem: NSStatusItem?
     private var pauseMenuItem: NSMenuItem?
@@ -29,11 +30,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let model = PanelModel(library: library)
         let panelController = PanelController(model: model, preferences: preferences, pasteService: pasteService)
         let ringController = RingController(library: library, pasteService: pasteService)
+        let ringTrigger = ModifierHoldTrigger(
+            onHold: { ringController.show() },
+            onRelease: { ringController.endHold() }
+        )
         let settingsController = SettingsWindowController(
             preferences: preferences,
             actions: .init(
                 clearHistory: { [weak self] in self?.confirmClearHistory() },
-                requestPastePermission: { pasteService.requestPermission() }
+                requestAccessibility: { pasteService.requestPermission() }
             )
         )
 
@@ -44,15 +49,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         self.monitor = monitor
         self.panelController = panelController
         self.ringController = ringController
+        self.ringTrigger = ringTrigger
         self.settingsController = settingsController
 
         configureStatusItem()
         monitor.start()
 
-        Publishers.CombineLatest(preferences.$hotKeyShortcut, preferences.$ringShortcut)
-            .sink { [weak self] tray, ring in
-                self?.registerHotKeys(tray: tray, ring: ring)
+        preferences.$hotKeyShortcut
+            .sink { [weak self] shortcut in
+                self?.registerHotKey(shortcut)
             }
+            .store(in: &cancellables)
+
+        preferences.$ringModifier
+            .sink { ringTrigger.modifier = $0 }
             .store(in: &cancellables)
 
         preferences.$historyLimit
@@ -72,7 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func applicationWillTerminate(_ notification: Notification) {
         monitor?.stop()
         library?.flush()
-        hotKeyManager.unregisterAll()
+        hotKeyManager.unregister()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -148,28 +158,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
     }
 
-    private func registerHotKeys(tray: GlobalShortcut, ring: GlobalShortcut) {
-        hotKeyManager.unregisterAll()
-
-        let trayStatus = hotKeyManager.register(tray, for: .tray, actions: .init(pressed: { [weak self] in
+    private func registerHotKey(_ shortcut: GlobalShortcut) {
+        let status = hotKeyManager.register(shortcut: shortcut) { [weak self] in
             self?.panelController?.toggle()
-        }))
-        let ringIsUnavailable: Bool
-        if tray == ring {
-            ringIsUnavailable = true
-        } else {
-            ringIsUnavailable = hotKeyManager.register(ring, for: .ring, actions: .init(
-                pressed: { [weak self] in self?.ringController?.hotKeyPressed() },
-                released: { [weak self] in self?.ringController?.hotKeyReleased() }
-            )) != noErr
         }
-
-        let trayIsUnavailable = trayStatus != noErr
-        if preferences.hotKeyIsUnavailable != trayIsUnavailable {
-            preferences.hotKeyIsUnavailable = trayIsUnavailable
-        }
-        if preferences.ringShortcutIsUnavailable != ringIsUnavailable {
-            preferences.ringShortcutIsUnavailable = ringIsUnavailable
+        let isUnavailable = status != noErr
+        if preferences.hotKeyIsUnavailable != isUnavailable {
+            preferences.hotKeyIsUnavailable = isUnavailable
         }
     }
 

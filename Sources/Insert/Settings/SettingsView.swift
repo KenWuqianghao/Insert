@@ -118,7 +118,7 @@ final class SettingsWindowController: NSObject, NSToolbarDelegate {
 struct SettingsView: View {
     struct Actions {
         let clearHistory: () -> Void
-        let requestPastePermission: () -> Void
+        let requestAccessibility: () -> Void
     }
 
     @ObservedObject var selection: SettingsSelection
@@ -164,11 +164,17 @@ private struct GeneralSettings: View {
                 if preferences.hotKeyIsUnavailable {
                     SettingsWarning(text: "Another app uses this shortcut. Record a different shortcut.")
                 }
-                LabeledContent("Shortcut to open the clip ring") {
-                    ShortcutRecorder(shortcut: $preferences.ringShortcut)
+                Picker("Hold to open the clip ring", selection: $preferences.ringModifier) {
+                    ForEach(RingModifier.allCases) { modifier in
+                        Text(modifier.name).tag(modifier)
+                    }
                 }
-                if preferences.ringShortcutIsUnavailable {
-                    SettingsWarning(text: "Another app or the tray uses this shortcut. Record a different shortcut.")
+                if !isTrusted && !preferences.pasteDirectly {
+                    LabeledContent {
+                        Button("Allow…", action: actions.requestAccessibility)
+                    } label: {
+                        SettingsWarning(text: "Insert needs the Accessibility permission to open the clip ring.")
+                    }
                 }
             }
 
@@ -179,9 +185,9 @@ private struct GeneralSettings: View {
                 }
                 if preferences.pasteDirectly && !isTrusted {
                     LabeledContent {
-                        Button("Allow…", action: actions.requestPastePermission)
+                        Button("Allow…", action: actions.requestAccessibility)
                     } label: {
-                        SettingsWarning(text: "Insert needs the Accessibility permission to paste.")
+                        SettingsWarning(text: "Insert needs the Accessibility permission to paste and to open the clip ring.")
                     }
                 }
             }

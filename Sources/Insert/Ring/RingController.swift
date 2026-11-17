@@ -13,7 +13,7 @@ final class RingModel: ObservableObject {
     @Published private(set) var showCount = 0
 
     func present(_ clips: [Clip], pointer: CGPoint, bounds: CGRect) -> CGPoint {
-        let margin = RingGeometry.outerRadius + RingGeometry.lift + 8
+        let margin = RingGeometry.outerRadius + 8
         self.clips = clips
         self.bounds = bounds
         center = CGPoint(
@@ -51,7 +51,7 @@ final class RingModel: ObservableObject {
 
     private func segmentArea(contains point: CGPoint) -> Bool {
         let distance = hypot(point.x - center.x, point.y - center.y)
-        return (RingGeometry.innerRadius...RingGeometry.outerRadius + RingGeometry.lift).contains(distance)
+        return (RingGeometry.innerRadius...RingGeometry.outerRadius).contains(distance)
     }
 
     private func previewFrame(for index: Int) -> CGRect {
@@ -83,13 +83,12 @@ final class RingModel: ObservableObject {
 
 @MainActor
 final class RingController: NSObject, NSWindowDelegate {
-    private enum Presentation: Equatable {
+    private enum Presentation {
         case hidden
-        case shown(at: TimeInterval)
+        case shown
         case hiding
     }
 
-    private static let holdThreshold: TimeInterval = 0.22
     private static let digitKeys = [
         [kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4, kVK_ANSI_5, kVK_ANSI_6, kVK_ANSI_7, kVK_ANSI_8],
         [kVK_ANSI_Keypad1, kVK_ANSI_Keypad2, kVK_ANSI_Keypad3, kVK_ANSI_Keypad4,
@@ -101,7 +100,6 @@ final class RingController: NSObject, NSWindowDelegate {
     private let pasteService: PasteService
     private let panel = RingPanel()
     private var presentation = Presentation.hidden
-    private var isHolding = false
 
     init(library: ClipLibrary, pasteService: PasteService) {
         self.library = library
@@ -130,36 +128,19 @@ final class RingController: NSObject, NSWindowDelegate {
     }
 
     private var isShown: Bool {
-        if case .shown = presentation { return true }
-        return false
+        presentation == .shown
     }
 
-    func hotKeyPressed() {
-        guard !isHolding else { return }
-        if isShown {
-            hide()
-        } else if show() {
-            isHolding = true
-        }
-    }
-
-    func hotKeyReleased() {
-        guard isHolding else { return }
-        isHolding = false
-        guard case .shown(let shownAt) = presentation, let index = model.selection else { return }
-        if ProcessInfo.processInfo.systemUptime - shownAt > Self.holdThreshold {
+    func endHold() {
+        if isShown, let index = model.selection {
             paste(index)
         }
     }
 
-    @discardableResult
     func show() -> Bool {
         guard presentation == .hidden else { return false }
         let clips = Array(library.clips.prefix(RingModel.capacity))
-        guard !clips.isEmpty else {
-            NSSound.beep()
-            return false
-        }
+        guard !clips.isEmpty else { return false }
 
         let mouse = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main else {
@@ -181,14 +162,13 @@ final class RingController: NSObject, NSWindowDelegate {
         panel.setFrame(frame, display: false)
         panel.alphaValue = 1
         panel.makeKeyAndOrderFront(nil)
-        presentation = .shown(at: ProcessInfo.processInfo.systemUptime)
+        presentation = .shown
         return true
     }
 
     func hide(then completion: (() -> Void)? = nil) {
         guard isShown else { return }
         presentation = .hiding
-        isHolding = false
 
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.12
@@ -244,6 +224,8 @@ final class RingController: NSObject, NSWindowDelegate {
         default:
             if let index = Self.digitKeys.lazy.compactMap({ $0.firstIndex(of: keyCode) }).first {
                 paste(index)
+            } else {
+                hide()
             }
         }
     }
