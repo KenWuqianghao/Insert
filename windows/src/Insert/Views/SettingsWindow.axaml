@@ -1,0 +1,210 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="using:Insert.Views"
+        x:Class="Insert.Views.SettingsWindow"
+        x:DataType="v:SettingsViewModel"
+        Title="Insert Settings"
+        Width="500"
+        SizeToContent="Height"
+        CanResize="False"
+        CanMinimize="False"
+        CanMaximize="False"
+        WindowStartupLocation="CenterScreen"
+        Icon="avares://Insert/Assets/Insert.ico"
+        Background="{DynamicResource SettingsBackground}">
+  <Window.Styles>
+    <Style Selector="Border.section">
+      <Setter Property="Background" Value="{DynamicResource SettingsCard}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SettingsDivider}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style Selector="Grid.row">
+      <Setter Property="MinHeight" Value="48" />
+      <Setter Property="Margin" Value="14,8" />
+    </Style>
+    <Style Selector="Border.divider">
+      <Setter Property="Height" Value="1" />
+      <Setter Property="Margin" Value="14,0" />
+      <Setter Property="Background" Value="{DynamicResource SettingsDivider}" />
+    </Style>
+    <Style Selector="TextBlock.label">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.detail">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.warning">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource NoticeOrange}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="ToggleSwitch">
+      <Setter Property="OnContent" Value="" />
+      <Setter Property="OffContent" Value="" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.tab">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Width" Value="76" />
+      <Setter Property="Height" Value="58" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.tab PathIcon">
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+    </Style>
+    <Style Selector="Button.tab.selected">
+      <Setter Property="Foreground" Value="{DynamicResource SystemAccentColor}" />
+      <Setter Property="Background" Value="{DynamicResource SettingsCard}" />
+    </Style>
+    <Style Selector="Button.tab.selected PathIcon">
+      <Setter Property="Foreground" Value="{DynamicResource SystemAccentColor}" />
+    </Style>
+  </Window.Styles>
+
+  <StackPanel>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="6" Margin="0,10,0,8">
+      <Button Classes="tab" Classes.selected="{Binding IsGeneral}" Click="ShowGeneral">
+        <StackPanel Spacing="4" HorizontalAlignment="Center">
+          <PathIcon Data="{StaticResource Icon.Settings}" Width="22" Height="22" />
+          <TextBlock Text="General" FontSize="12" HorizontalAlignment="Center" />
+        </StackPanel>
+      </Button>
+      <Button Classes="tab" Classes.selected="{Binding IsPrivacy}" Click="ShowPrivacy">
+        <StackPanel Spacing="4" HorizontalAlignment="Center">
+          <PathIcon Data="{StaticResource Icon.HandLeft}" Width="22" Height="22" />
+          <TextBlock Text="Privacy" FontSize="12" HorizontalAlignment="Center" />
+        </StackPanel>
+      </Button>
+    </StackPanel>
+    <Border Height="1" Background="{DynamicResource SettingsDivider}" />
+
+    <!-- General -->
+    <StackPanel Spacing="12" Margin="24,20,24,24" IsVisible="{Binding IsGeneral}">
+      <Border Classes="section">
+        <StackPanel>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel VerticalAlignment="Center" Spacing="2">
+              <TextBlock Classes="label" Text="Open Insert at login" />
+              <TextBlock Classes="warning" Text="{Binding LoginItemError}" IsVisible="{Binding LoginItemError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </StackPanel>
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding LaunchAtLogin}" />
+          </Grid>
+          <Border Classes="divider" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Show the icon in the notification area" />
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding ShowTrayIcon}" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="section">
+        <StackPanel>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel VerticalAlignment="Center" Spacing="2">
+              <TextBlock Classes="label" Text="Shortcut to open Insert" />
+              <TextBlock Classes="warning" Text="Another app uses this shortcut. Record a different shortcut." IsVisible="{Binding HotkeyIsUnavailable}" />
+            </StackPanel>
+            <Button x:Name="RecordButton" Grid.Column="1" Content="{Binding HotkeyName}" MinWidth="110" HorizontalContentAlignment="Center"
+                    VerticalAlignment="Center" Click="RecordShortcut" ToolTip.Tip="Use at least one modifier key. Press Esc to cancel." />
+          </Grid>
+          <Border Classes="divider" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel VerticalAlignment="Center" Spacing="2">
+              <TextBlock Classes="label" Text="Hold to open the clip ring" />
+              <TextBlock Classes="warning" Text="Insert cannot read the keyboard, so the clip ring does not open." IsVisible="{Binding RingIsUnavailable}" />
+            </StackPanel>
+            <ComboBox Grid.Column="1" ItemsSource="{Binding RingModifiers}" SelectedItem="{Binding RingModifier}" MinWidth="120" VerticalAlignment="Center" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="section">
+        <Grid Classes="row" ColumnDefinitions="*,Auto">
+          <StackPanel VerticalAlignment="Center" Spacing="2">
+            <TextBlock Classes="label" Text="Paste directly into the active app" />
+            <TextBlock Classes="detail" Text="When this is off, Insert only copies the clip." />
+          </StackPanel>
+          <ToggleSwitch Grid.Column="1" IsChecked="{Binding PasteDirectly}" />
+        </Grid>
+      </Border>
+
+      <Border Classes="section">
+        <Grid Classes="row" ColumnDefinitions="*,Auto">
+          <StackPanel VerticalAlignment="Center" Spacing="2">
+            <TextBlock Classes="label" Text="Keep in history" />
+            <TextBlock Classes="detail" Text="Insert deletes the oldest clips first. Pinned clips do not count." />
+          </StackPanel>
+          <ComboBox Grid.Column="1" ItemsSource="{Binding HistoryLimits}" SelectedItem="{Binding HistoryLimit}" MinWidth="120" VerticalAlignment="Center" />
+        </Grid>
+      </Border>
+    </StackPanel>
+
+    <!-- Privacy -->
+    <StackPanel Spacing="12" Margin="24,20,24,24" IsVisible="{Binding IsPrivacy}">
+      <StackPanel Spacing="6">
+        <Border Classes="section">
+          <StackPanel>
+            <Grid Classes="row" ColumnDefinitions="*,Auto">
+              <StackPanel VerticalAlignment="Center" Spacing="2">
+                <TextBlock Classes="label" Text="Ignored apps" />
+                <TextBlock Classes="detail" Text="Insert does not save a copy that you make while one of these apps is in front." />
+              </StackPanel>
+              <Button Grid.Column="1" Content="Add App…" VerticalAlignment="Center" Margin="12,0,0,0" Click="AddIgnoredApp" />
+            </Grid>
+            <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding IgnoredApps}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="v:IgnoredAppRow">
+                  <StackPanel>
+                    <Border Classes="divider" />
+                    <Grid Classes="row" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                      <Image Source="{Binding Icon}" Width="20" Height="20" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Classes="label" Text="{Binding App.Name}" />
+                      <Button Grid.Column="2" Classes="plain" Width="24" Height="24" CornerRadius="12" Click="RemoveIgnoredApp"
+                              ToolTip.Tip="{Binding App.Name, StringFormat='Remove {0}'}">
+                        <PathIcon Data="{StaticResource Icon.Clear}" Width="16" Height="16" />
+                      </Button>
+                    </Grid>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            </ScrollViewer>
+          </StackPanel>
+        </Border>
+        <TextBlock Classes="detail" Margin="4,0"
+                   Text="Insert always skips items that an app marks as private, such as passwords from a password manager." />
+      </StackPanel>
+
+      <Border Classes="section">
+        <Grid Classes="row" ColumnDefinitions="*,Auto">
+          <StackPanel VerticalAlignment="Center" Spacing="2">
+            <TextBlock Classes="label" Text="Pause capture" />
+            <TextBlock Classes="detail" Text="Insert saves no new clips while capture is paused." />
+          </StackPanel>
+          <ToggleSwitch Grid.Column="1" IsChecked="{Binding CapturePaused}" />
+        </Grid>
+      </Border>
+
+      <Border Classes="section">
+        <Grid Classes="row" ColumnDefinitions="*,Auto">
+          <StackPanel VerticalAlignment="Center" Spacing="2">
+            <TextBlock Classes="label" Text="History" />
+            <TextBlock Classes="detail" Text="Delete all clips that are not pinned." />
+          </StackPanel>
+          <Button Grid.Column="1" Content="Clear History…" VerticalAlignment="Center" Margin="12,0,0,0" Click="ClearHistory" />
+        </Grid>
+      </Border>
+    </StackPanel>
+  </StackPanel>
+</Window>

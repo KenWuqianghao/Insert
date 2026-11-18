@@ -1,0 +1,130 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:Insert.Views"
+             x:Class="Insert.Views.ClipCardView"
+             x:DataType="v:CardViewModel"
+             Width="232" Height="232"
+             ClipToBounds="False">
+  <UserControl.DataTemplates>
+    <DataTemplate DataType="v:TextBody">
+      <TextBlock Text="{Binding Text}" FontSize="12.5" LineHeight="18" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                 Foreground="{DynamicResource TextPrimary}" Opacity="0.88"
+                 Margin="14,12,14,0" VerticalAlignment="Top" />
+    </DataTemplate>
+    <DataTemplate DataType="v:LinkBody">
+      <StackPanel Margin="14,14,14,0" Spacing="6" VerticalAlignment="Top">
+        <PathIcon Data="{StaticResource Icon.Link}" Width="18" Height="18" HorizontalAlignment="Left"
+                  Foreground="{DynamicResource SystemAccentColor}" />
+        <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2"
+                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimary}" />
+        <TextBlock Text="{Binding Url}" FontSize="12" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" Classes="secondary" />
+      </StackPanel>
+    </DataTemplate>
+    <DataTemplate DataType="v:ImageBody">
+      <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+    </DataTemplate>
+    <DataTemplate DataType="v:ColorBody">
+      <Border Background="{Binding Fill}">
+        <TextBlock Text="{Binding Hex}" Foreground="{Binding Foreground}" FontFamily="Cascadia Mono, Consolas, monospace"
+                   FontSize="17" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+      </Border>
+    </DataTemplate>
+    <DataTemplate DataType="v:FilesBody">
+      <StackPanel Spacing="8" Margin="14,0" VerticalAlignment="Center">
+        <Panel Width="56" Height="56" HorizontalAlignment="Center">
+          <Image Source="{Binding Icon}" IsVisible="{Binding Icon, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          <PathIcon Data="{Binding Glyph}" Width="40" Height="40" IsVisible="{Binding Icon, Converter={x:Static ObjectConverters.IsNull}}" />
+        </Panel>
+        <ItemsControl ItemsSource="{Binding Names}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="x:String">
+              <TextBlock Text="{Binding}" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"
+                         Foreground="{DynamicResource TextPrimary}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Text="{Binding More}" FontSize="11" Classes="secondary" HorizontalAlignment="Center"
+                   IsVisible="{Binding More, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      </StackPanel>
+    </DataTemplate>
+    <DataTemplate DataType="v:PlaceholderBody">
+      <StackPanel Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <PathIcon Data="{Binding Glyph}" Width="36" Height="36" />
+        <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium" Classes="secondary" HorizontalAlignment="Center" />
+      </StackPanel>
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
+  <UserControl.Styles>
+    <Style Selector="Panel#Root">
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.16" />
+        </Transitions>
+      </Setter>
+      <Setter Property="RenderTransform" Value="none" />
+    </Style>
+    <Style Selector="Panel#Root.deleting">
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="RenderTransform" Value="translate(-26px, 8px) scale(0.94)" />
+      <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+    <Style Selector="Border#SelectionRing">
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+        </Transitions>
+      </Setter>
+      <Setter Property="Opacity" Value="0" />
+    </Style>
+    <Style Selector="Border#SelectionRing.selected">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+  </UserControl.Styles>
+
+  <Panel x:Name="Root" Classes.deleting="{Binding IsDeleting}">
+    <Border x:Name="Card" CornerRadius="14" ClipToBounds="True" Background="{DynamicResource CardBackground}"
+            BoxShadow="0 3 6 0 #38000000">
+      <Grid RowDefinitions="52,*,28">
+        <Grid Background="{Binding HeaderBrush}" ColumnDefinitions="*,Auto" ClipToBounds="True">
+          <StackPanel Margin="14,0,8,0" VerticalAlignment="Center" Spacing="1">
+            <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding Subtitle}" FontSize="11" FontWeight="Medium" Foreground="White" Opacity="0.82" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+          <Image Grid.Column="1" Source="{Binding AppIcon}" Width="64" Height="64" IsVisible="{Binding HasAppIcon}"
+                 RenderOptions.BitmapInterpolationMode="HighQuality">
+            <Image.RenderTransform>
+              <TranslateTransform X="12" />
+            </Image.RenderTransform>
+            <Image.Effect>
+              <DropShadowEffect OffsetX="0" OffsetY="1" BlurRadius="8" Color="#40000000" />
+            </Image.Effect>
+          </Image>
+          <PathIcon Grid.Column="1" Data="{Binding KindGlyph}" Width="22" Height="22" Margin="0,0,14,0" Foreground="#D9FFFFFF"
+                    IsVisible="{Binding !HasAppIcon}" />
+        </Grid>
+
+        <ContentControl Grid.Row="1" Content="{Binding Body}" ClipToBounds="True"
+                        HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+
+        <Grid Grid.Row="2" Background="{DynamicResource CardBackground}" ColumnDefinitions="Auto,*,Auto" Margin="0">
+          <Ellipse Width="8" Height="8" Margin="12,0,0,0" Fill="{Binding PinBrush}"
+                   IsVisible="{Binding PinBrush, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          <TextBlock Grid.ColumnSpan="3" Text="{Binding Footer}" FontSize="11" FontWeight="Medium" Classes="secondary"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="40,0" />
+          <Border Grid.Column="2" Margin="0,0,10,0" Padding="6,1" CornerRadius="8" VerticalAlignment="Center"
+                  Background="{DynamicResource SystemAccentColor}"
+                  IsVisible="{Binding Badge, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock Text="{Binding Badge}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+          </Border>
+        </Grid>
+      </Grid>
+    </Border>
+    <Border CornerRadius="14" BorderThickness="1" BorderBrush="{DynamicResource CardStroke}" IsHitTestVisible="False" />
+    <Border x:Name="SelectionRing" Margin="-5" IsHitTestVisible="False" Classes.selected="{Binding IsSelected}">
+      <Border CornerRadius="18" BorderBrush="{DynamicResource SystemAccentColor}"
+              BorderThickness="{Binding SelectionThickness}" Opacity="{Binding SelectionOpacity}" />
+    </Border>
+  </Panel>
+</UserControl>
