@@ -245,6 +245,7 @@ public sealed class CaptureTests
         Assert.Equal("https://example.com", new ClipPayload([rtf, url]).PlainText);
         Assert.Equal("Bold text", new ClipPayload([html, rtf]).PlainText);
         Assert.Equal("Hello", new ClipPayload([html]).PlainText);
+        Assert.Equal("€", new ClipPayload([Utf8(ClipFormats.Rtf, @"{\rtf1\ansi\ansicpg1252 \'80}")]).PlainText);
         Assert.Null(new ClipPayload([Utf8(ClipFormats.Png, "x")]).PlainText);
     }
 }
