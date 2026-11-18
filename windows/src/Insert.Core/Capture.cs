@@ -209,84 +209,121 @@ public static partial class ClipCapture
     {
         var source = Encoding.Latin1.GetString(rtf);
         var output = new StringBuilder();
-        var depth = 0;
-        var skipDepth = int.MaxValue;
+        var bytes = new List<byte>();
+        var encoding = CodePage(1252);
+        var groups = new Stack<(int Uc, bool Skip)>();
+        var (uc, skip) = (1, false);
+        // The characters after \uN that are the fallback for readers without Unicode. A control or an \'hh is one character.
+        var fallback = 0;
+
+        void FlushBytes()
+        {
+            if (bytes.Count == 0) return;
+            output.Append(encoding.GetString(bytes.ToArray()));
+            bytes.Clear();
+        }
+
         for (var index = 0; index < source.Length; index++)
         {
             var c = source[index];
-            switch (c)
+            if (c is '{' or '}')
             {
-                case '{':
-                    depth++;
-                    if (index + 2 < source.Length && source[index + 1] == '\\' && source[index + 2] == '*') skipDepth = Math.Min(skipDepth, depth);
-                    break;
-                case '}':
-                    if (depth == skipDepth) skipDepth = int.MaxValue;
-                    depth--;
-                    break;
-                case '\\':
-                    index = ReadControl(source, index, output, depth >= skipDepth, ref skipDepth, depth);
-                    break;
-                case '\r' or '\n':
-                    break;
-                default:
-                    if (depth < skipDepth) output.Append(c);
-                    break;
+                FlushBytes();
+                fallback = 0;
+                if (c == '{')
+                {
+                    groups.Push((uc, skip));
+                    if (index + 2 < source.Length && source[index + 1] == '\\' && source[index + 2] == '*') skip = true;
+                }
+                else if (groups.Count > 0)
+                {
+                    (uc, skip) = groups.Pop();
+                }
+                continue;
             }
-        }
-        return output.ToString().Trim();
-    }
-
-    private static readonly HashSet<string> SkippedGroups = ["fonttbl", "colortbl", "stylesheet", "info", "pict", "header", "footer", "listtable", "listoverridetable", "rsidtbl", "generator", "themedata", "datastore", "latentstyles"];
-
-    private static int ReadControl(string source, int index, StringBuilder output, bool skipping, ref int skipDepth, int depth)
-    {
-        if (index + 1 >= source.Length) return index;
-        var next = source[index + 1];
-        if (!char.IsAsciiLetter(next))
-        {
-            if (next == '\'' && index + 3 < source.Length)
+            if (c is '\r' or '\n') continue;
+            if (c != '\\' || index + 1 >= source.Length)
             {
-                if (!skipping && int.TryParse(source.AsSpan(index + 2, 2), System.Globalization.NumberStyles.HexNumber, null, out var code))
-                    output.Append(Encoding.Latin1.GetString([(byte)code]));
-                return index + 3;
+                FlushBytes();
+                if (fallback > 0) fallback--;
+                else if (!skip) output.Append(c);
+                continue;
             }
-            if (!skipping && next is '\\' or '{' or '}') output.Append(next);
-            if (!skipping && next == '~') output.Append('\u00A0');
-            return index + 1;
-        }
 
-        var end = index + 1;
-        while (end < source.Length && char.IsAsciiLetter(source[end])) end++;
-        var word = source[(index + 1)..end];
-        var numberStart = end;
-        if (end < source.Length && (source[end] == '-' || char.IsAsciiDigit(source[end]))) end++;
-        while (end < source.Length && char.IsAsciiDigit(source[end])) end++;
-        var number = source[numberStart..end];
-        if (end < source.Length && source[end] == ' ') end++;
+            var next = source[index + 1];
+            if (next == '\'')
+            {
+                if (index + 3 < source.Length && byte.TryParse(source.AsSpan(index + 2, 2), System.Globalization.NumberStyles.HexNumber, null, out var value))
+                {
+                    if (fallback > 0) fallback--;
+                    else if (!skip) bytes.Add(value);
+                }
+                index += 3;
+                continue;
+            }
+            FlushBytes();
+            if (!char.IsAsciiLetter(next))
+            {
+                index++;
+                if (fallback > 0) fallback--;
+                else if (!skip && next is '\\' or '{' or '}') output.Append(next);
+                else if (!skip && next == '~') output.Append(' ');
+                continue;
+            }
 
-        if (SkippedGroups.Contains(word))
-        {
-            skipDepth = Math.Min(skipDepth, depth);
-        }
-        else if (!skipping)
-        {
+            var end = index + 1;
+            while (end < source.Length && char.IsAsciiLetter(source[end])) end++;
+            var word = source[(index + 1)..end];
+            var numberStart = end;
+            if (end < source.Length && (source[end] == '-' || char.IsAsciiDigit(source[end]))) end++;
+            while (end < source.Length && char.IsAsciiDigit(source[end])) end++;
+            var number = int.TryParse(source.AsSpan(numberStart, end - numberStart), out var parsed) ? parsed : (int?)null;
+            if (end < source.Length && source[end] == ' ') end++;
+            index = end - 1;
+
+            if (fallback > 0)
+            {
+                fallback--;
+                continue;
+            }
+            if (SkippedGroups.Contains(word)) skip = true;
+            if (skip) continue;
             switch (word)
             {
+                case "ansicpg" when number is { } page:
+                    encoding = CodePage(page);
+                    break;
+                case "uc" when number is { } count:
+                    uc = Math.Max(count, 0);
+                    break;
+                case "u" when number is { } code:
+                    output.Append((char)(short)code);
+                    fallback = uc;
+                    break;
                 case "par" or "line" or "row":
                     output.Append('\n');
                     break;
                 case "tab" or "cell":
                     output.Append('\t');
                     break;
-                case "u" when int.TryParse(number, out var code):
-                    output.Append((char)(short)code);
-                    // The next character is the fallback for readers without Unicode.
-                    if (end < source.Length && source[end] != '\\' && source[end] != '{' && source[end] != '}') end++;
-                    break;
             }
         }
-        return end - 1;
+        FlushBytes();
+        return output.ToString().Trim();
+    }
+
+    private static readonly HashSet<string> SkippedGroups = ["fonttbl", "colortbl", "stylesheet", "info", "pict", "header", "footer", "listtable", "listoverridetable", "rsidtbl", "generator", "themedata", "datastore", "latentstyles"];
+
+    private static Encoding CodePage(int page)
+    {
+        try
+        {
+            return CodePagesEncodingProvider.Instance.GetEncoding(page) ?? Encoding.GetEncoding(page);
+        }
+        catch (Exception error) when (error is ArgumentException or NotSupportedException)
+        {
+            return Encoding.Latin1;
+        }
     }
 
     [GeneratedRegex("<a\\s[^>]*href\\s*=\\s*[\"'](?<href>[^\"']*)[\"'][^>]*>(?<body>.*?)</a>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]

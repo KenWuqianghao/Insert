@@ -25,15 +25,20 @@ public static class Log
         var line = $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff} {message}";
         lock (Gate)
         {
-            Console.Error.WriteLine(line);
-            if (s_path is null) return;
-            try
-            {
-                File.AppendAllText(s_path, line + Environment.NewLine);
-            }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-            {
-            }
+            // The hooks and the message window log from native callbacks, so a failed write must not throw.
+            Try(() => Console.Error.WriteLine(line));
+            if (s_path is { } path) Try(() => File.AppendAllText(path, line + Environment.NewLine));
+        }
+    }
+
+    private static void Try(Action write)
+    {
+        try
+        {
+            write();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or ObjectDisposedException)
+        {
         }
     }
 }

@@ -238,7 +238,8 @@ public sealed class ClipLibraryTests : IDisposable
         File.Move(_dir.File("index.json"), _dir.File("index.json.saved"));
         Directory.Move(_dir.File("index.json.blocked"), _dir.File("index.json"));
 
-        Assert.ThrowsAny<IOException>(library.Flush);
+        var error = Record.Exception(library.Flush);
+        Assert.True(error is IOException or UnauthorizedAccessException, error?.ToString());
         Assert.True(Storage.HasPayload(oldest));
 
         Directory.Delete(_dir.File("index.json"));

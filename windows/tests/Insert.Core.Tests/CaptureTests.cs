@@ -89,6 +89,15 @@ public sealed class CaptureTests
         Assert.Null(Classify(Utf8(ClipFormats.Rtf, @"{\rtf1{\fonttbl\f0 Arial;}}")));
     }
 
+    [Theory]
+    [InlineData(@"{\rtf1\ansi\ansicpg1252 \'80}", "€")]
+    [InlineData(@"{\rtf1\ansi\ansicpg936 \'c4\'e3\'ba\'c3}", "你好")]
+    [InlineData(@"{\rtf1\ansi\uc0\u945X}", "αX")]
+    [InlineData(@"{\rtf1\ansi\uc2\u945\'80\'80X}", "αX")]
+    [InlineData(@"{\rtf1\ansi{\uc0 \u945}\u946?X}", "αβX")]
+    public void RtfTextUsesTheCodePageAndTheUnicodeFallbackCount(string rtf, string text) =>
+        Assert.Equal(text, ClipCapture.RtfText(Encoding.Latin1.GetBytes(rtf)));
+
     [Fact]
     public void HtmlOnlyIsStrippedRichText()
     {

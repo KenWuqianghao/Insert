@@ -42,20 +42,18 @@ internal sealed unsafe class WinClipboard : IClipboardService, IDisposable
                 return null;
 
             var representations = new List<Representation>();
-            long total = 0;
             foreach (var name in ClipFormats.Stored)
             {
                 if (!available.TryGetValue(name, out var format) || ReadData(format) is not { Length: > 0 } raw) continue;
                 var data = Normalize(name, raw);
                 if (data is not { Length: > 0 }) continue;
-                total += data.Length;
-                if (total > ClipCapture.MaxByteCount) return null;
                 representations.Add(new Representation(name, data));
             }
             // A DIB and a DIBV5 are two forms of one picture. When an app gives one, Windows makes the other.
             // Only the DIBV5 can keep an alpha channel.
             if (representations.Any(r => r.Format == ClipFormats.DibV5))
                 representations.RemoveAll(r => r.Format == ClipFormats.Dib);
+            if (representations.Sum(r => (long)r.Data.Length) > ClipCapture.MaxByteCount) return null;
             return representations.Count == 0 ? null : new ClipPayload(representations);
         }
         finally
