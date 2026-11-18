@@ -194,6 +194,7 @@ public sealed class ClipLibraryTests : IDisposable
     [InlineData("null")]
     [InlineData("""{ "clips": null, "pinboards": [] }""")]
     [InlineData("""{ "clips": [null], "pinboards": [] }""")]
+    [InlineData("""{ "clips": [{ "id": "00000000-0000-0000-0000-000000000002", "createdAt": "2026-01-01T00:00:00Z", "content": { "kind": "text" }, "contentHash": "h", "byteCount": 1 }], "pinboards": [] }""")]
     [InlineData("""{ "clips": [], "pinboards": [{ "id": "00000000-0000-0000-0000-000000000001", "color": "Red" }] }""")]
     public void IncompleteIndexIsMovedAsideLikeACorruptOne(string json)
     {

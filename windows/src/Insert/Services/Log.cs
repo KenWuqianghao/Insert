@@ -15,7 +15,7 @@ public static class Log
         {
             if (File.Exists(s_path) && new FileInfo(s_path).Length > MaxBytes) File.Move(s_path, s_path + ".1", overwrite: true);
         }
-        catch (IOException)
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
         }
     }
@@ -31,7 +31,7 @@ public static class Log
             {
                 File.AppendAllText(s_path, line + Environment.NewLine);
             }
-            catch (IOException)
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
             }
         }

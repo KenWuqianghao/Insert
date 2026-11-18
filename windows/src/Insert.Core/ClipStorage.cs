@@ -58,8 +58,18 @@ public sealed class ClipStorage(string root)
     /// <summary>The serializer does not enforce non-null members, so a file such as <c>{"clips":null}</c> loads.</summary>
     private static bool IsComplete(LibraryIndex index) =>
         index.Clips is not null && index.Pinboards is not null
-        && index.Clips.All(clip => clip is { Content: not null, ContentHash: not null })
+        && index.Clips.All(clip => clip is { ContentHash: not null, Source: null or { Id: not null, Name: not null } } && IsComplete(clip.Content))
         && index.Pinboards.All(pinboard => pinboard is { Name: not null });
+
+    private static bool IsComplete(ClipContent? content) => content switch
+    {
+        null => false,
+        TextContent text => text.Snippet is { Text: not null },
+        RichTextContent rich => rich.Snippet is { Text: not null },
+        LinkContent link => link.Url is not null,
+        FilesContent files => files.Paths is not null && files.Paths.All(path => path is not null),
+        _ => true,
+    };
 
     public void SaveIndex(LibraryIndex index) =>
         WriteAtomic(IndexPath, JsonSerializer.SerializeToUtf8Bytes(index, InsertJson.Default.LibraryIndex));
