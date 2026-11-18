@@ -68,6 +68,7 @@ public sealed class ClipLibraryTests : IDisposable
         var c = Insert(library, "c");
 
         Assert.Equal([c, b, pinned], Ids(library));
+        library.Flush();
         Assert.False(Storage.HasPayload(oldest));
 
         library.HistoryLimit = 100;
@@ -87,6 +88,7 @@ public sealed class ClipLibraryTests : IDisposable
         library.ClearHistory();
 
         Assert.Equal([pinned], Ids(library));
+        library.Flush();
         Assert.False(Storage.HasPayload(loose));
         Assert.True(Storage.HasPayload(pinned));
     }
@@ -108,6 +110,7 @@ public sealed class ClipLibraryTests : IDisposable
         Assert.Empty(library.Pinboards);
         Assert.Equal([d, c], Ids(library));
         Assert.All(library.Clips, clip => Assert.Null(clip.PinboardId));
+        library.Flush();
         Assert.False(Storage.HasPayload(a));
         Assert.False(Storage.HasPayload(b));
     }
@@ -185,5 +188,60 @@ public sealed class ClipLibraryTests : IDisposable
         Assert.False(File.Exists(_dir.File("index.json")));
         var backup = Assert.Single(Directory.GetFiles(_dir.Path, "index.json.corrupt-*"));
         Assert.Equal("\0garbage", File.ReadAllText(backup));
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("""{ "clips": null, "pinboards": [] }""")]
+    [InlineData("""{ "clips": [null], "pinboards": [] }""")]
+    [InlineData("""{ "clips": [], "pinboards": [{ "id": "00000000-0000-0000-0000-000000000001", "color": "Red" }] }""")]
+    public void IncompleteIndexIsMovedAsideLikeACorruptOne(string json)
+    {
+        var library = Open();
+        var kept = Insert(library, "x");
+        library.Flush();
+        File.WriteAllText(_dir.File("index.json"), json);
+
+        var reopened = Open();
+
+        Assert.Empty(reopened.Clips);
+        Assert.Single(Directory.GetFiles(_dir.Path, "index.json.corrupt-*"));
+        Assert.True(Storage.HasPayload(kept));
+    }
+
+    [Fact]
+    public void PayloadsOfACorruptIndexStayOverLaterLaunches()
+    {
+        var library = Open();
+        var old = Insert(library, "old");
+        library.Flush();
+        File.WriteAllText(_dir.File("index.json"), "\0garbage");
+
+        var second = Open();
+        var added = Insert(second, "new");
+        second.Flush();
+        var third = Open();
+
+        Assert.Equal([added], Ids(third));
+        Assert.True(Storage.HasPayload(old));
+    }
+
+    [Fact]
+    public void RemovedClipFilesStayUntilTheIndexIsSaved()
+    {
+        var library = Open(historyLimit: 1);
+        var oldest = Insert(library, "a");
+        library.Flush();
+        Insert(library, "b");
+        Directory.CreateDirectory(_dir.File("index.json.blocked"));
+        File.Move(_dir.File("index.json"), _dir.File("index.json.saved"));
+        Directory.Move(_dir.File("index.json.blocked"), _dir.File("index.json"));
+
+        Assert.ThrowsAny<IOException>(library.Flush);
+        Assert.True(Storage.HasPayload(oldest));
+
+        Directory.Delete(_dir.File("index.json"));
+        library.Flush();
+        Assert.False(Storage.HasPayload(oldest));
     }
 }

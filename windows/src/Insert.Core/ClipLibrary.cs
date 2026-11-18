@@ -11,6 +11,8 @@ public sealed class ClipLibrary
     private List<Clip> _clips;
     private List<Pinboard> _pinboards;
     private int _historyLimit;
+    /// <summary>Clips that left the library. Their files stay until the index without them is saved.</summary>
+    private readonly HashSet<Guid> _removedFiles = [];
 
     public ClipLibrary(ClipStorage storage, int historyLimit, Func<DateTimeOffset>? now = null)
     {
@@ -21,8 +23,7 @@ public sealed class ClipLibrary
         var index = storage.LoadIndex();
         _clips = index.Clips.Where(clip => storage.HasPayload(clip.Id)).ToList();
         _pinboards = index.Pinboards.ToList();
-        // After a corrupt index, the payload files are the only copy of the clips. Keep them for a manual recovery.
-        if (storage.CorruptBackup is null) storage.RemoveOrphans(_clips.Select(clip => clip.Id).ToHashSet());
+        if (!storage.HasCorruptBackup) storage.RemoveOrphans(_clips.Select(clip => clip.Id).ToHashSet());
     }
 
     /// <summary>The library changed. Call <see cref="Flush"/> soon after, to save the index.</summary>
@@ -116,6 +117,8 @@ public sealed class ClipLibrary
         if (!HasUnsavedChanges) return;
         _storage.SaveIndex(new LibraryIndex(_clips.ToList(), _pinboards.ToList()));
         HasUnsavedChanges = false;
+        foreach (var id in _removedFiles) _storage.RemoveFiles(id);
+        _removedFiles.Clear();
     }
 
     private void Update(Action<List<Clip>> change)
@@ -130,8 +133,7 @@ public sealed class ClipLibrary
     private void Commit(List<Clip> next)
     {
         var kept = next.Select(clip => clip.Id).ToHashSet();
-        foreach (var clip in _clips.Where(clip => !kept.Contains(clip.Id)))
-            _storage.RemoveFiles(clip.Id);
+        _removedFiles.UnionWith(_clips.Where(clip => !kept.Contains(clip.Id)).Select(clip => clip.Id));
         _clips = next;
     }
 

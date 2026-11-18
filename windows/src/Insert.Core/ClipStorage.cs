@@ -30,25 +30,36 @@ public sealed class ClipStorage(string root)
 
     public string ThumbnailPath(Guid id) => Path.Combine(ThumbnailsPath, $"{id:D}.png");
 
-    /// <summary>A file that Insert cannot read moves to <c>index.json.corrupt-&lt;time&gt;</c>, so the next save does not delete it.</summary>
-    /// <summary>The path of the moved index, after <see cref="LoadIndex"/> found a file that it cannot read.</summary>
-    public string? CorruptBackup { get; private set; }
+    /// <summary>
+    /// A file that Insert cannot read moves to <c>index.json.corrupt-&lt;time&gt;</c>.
+    /// While such a file exists, the payloads can be the only copy of the clips, so the library keeps them.
+    /// </summary>
+    public bool HasCorruptBackup =>
+        Directory.Exists(Root) && Directory.EnumerateFiles(Root, "index.json.corrupt-*").Any();
 
     public LibraryIndex LoadIndex()
     {
         if (!File.Exists(IndexPath)) return LibraryIndex.Empty;
+        LibraryIndex? index;
         try
         {
             using var stream = File.OpenRead(IndexPath);
-            return JsonSerializer.Deserialize(stream, InsertJson.Default.LibraryIndex) ?? LibraryIndex.Empty;
+            index = JsonSerializer.Deserialize(stream, InsertJson.Default.LibraryIndex);
         }
         catch (Exception error) when (error is JsonException or NotSupportedException)
         {
-            CorruptBackup = $"{IndexPath}.corrupt-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
-            File.Move(IndexPath, CorruptBackup, overwrite: true);
-            return LibraryIndex.Empty;
+            index = null;
         }
+        if (index is not null && IsComplete(index)) return index;
+        File.Move(IndexPath, $"{IndexPath}.corrupt-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}", overwrite: true);
+        return LibraryIndex.Empty;
     }
+
+    /// <summary>The serializer does not enforce non-null members, so a file such as <c>{"clips":null}</c> loads.</summary>
+    private static bool IsComplete(LibraryIndex index) =>
+        index.Clips is not null && index.Pinboards is not null
+        && index.Clips.All(clip => clip is { Content: not null, ContentHash: not null })
+        && index.Pinboards.All(pinboard => pinboard is { Name: not null });
 
     public void SaveIndex(LibraryIndex index) =>
         WriteAtomic(IndexPath, JsonSerializer.SerializeToUtf8Bytes(index, InsertJson.Default.LibraryIndex));
