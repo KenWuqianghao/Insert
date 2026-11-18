@@ -66,9 +66,17 @@ public sealed class CommandChannel : IDisposable
             {
                 return;
             }
-            catch (IOException error)
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
                 Log.Info($"command channel: {error.Message}");
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(1), _stop.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
             }
         }
     });

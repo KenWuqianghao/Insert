@@ -55,8 +55,7 @@ public static class Format
         var weeks = days / 7;
         if (weeks < 5) return $"{weeks} {(weeks == 1 ? "week" : "weeks")} ago";
 
-        var months = days / 30;
-        if (months < 12) return $"{months} mo ago";
+        if (days < 365) return $"{days / 30} mo ago";
 
         return $"{days / 365} yr ago";
     }

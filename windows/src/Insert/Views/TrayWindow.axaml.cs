@@ -23,6 +23,10 @@ public sealed partial class TrayWindow : Window
     private readonly PasteService _paste;
     private readonly DispatcherTimer _clock;
     private Presentation _presentation = Presentation.Hidden;
+    /// <summary>Counts the hides, so that the timer of an earlier hide does nothing after the tray opened again.</summary>
+    private int _hideCount;
+    /// <summary>The naming that has the name box. Other model changes keep the text that the user typed.</summary>
+    private PanelMode.Naming? _naming;
     private WindowHandle _target = WindowHandle.None;
     private PixelRect _workArea;
     private double _scaling = 1;
@@ -84,6 +88,7 @@ public sealed partial class TrayWindow : Window
         if (_presentation == Presentation.Shown) return;
         _target = _platform.Apps.ForegroundWindow();
         _presentation = Presentation.Shown;
+        _naming = null;
 
         var pointer = _platform.Windows.Pointer;
         var screen = Screens.ScreenFromPoint(pointer) ?? Screens.Primary;
@@ -107,11 +112,12 @@ public sealed partial class TrayWindow : Window
     {
         if (_presentation != Presentation.Shown) return;
         _presentation = Presentation.Hiding;
+        var hide = ++_hideCount;
         _clock.Stop();
         Body.Classes.Add("hidden");
         DispatcherTimer.RunOnce(() =>
         {
-            if (_presentation != Presentation.Hiding) return;
+            if (_presentation != Presentation.Hiding || hide != _hideCount) return;
             Hide();
             _presentation = Presentation.Hidden;
             ViewModel.Model.DidHide();
@@ -156,12 +162,15 @@ public sealed partial class TrayWindow : Window
             var model = ViewModel.Model;
             if (model.Mode is PanelMode.Naming naming)
             {
+                if (naming == _naming) return;
+                _naming = naming;
                 NameBox.Text = model.CurrentName(naming.Target);
                 NameBox.Focus();
                 NameBox.SelectAll();
             }
             else
             {
+                _naming = null;
                 SearchBox.Focus();
             }
         }, DispatcherPriority.Input);

@@ -111,7 +111,8 @@ public sealed class ModelTests : IDisposable
     [InlineData(35 * 86_400 - 1, "4 weeks ago")]
     [InlineData(35 * 86_400, "1 mo ago")]
     [InlineData(360 * 86_400 - 1, "11 mo ago")]
-    [InlineData(360 * 86_400, "0 yr ago")]
+    [InlineData(360 * 86_400, "12 mo ago")]
+    [InlineData(364 * 86_400, "12 mo ago")]
     [InlineData(365 * 86_400, "1 yr ago")]
     [InlineData(800 * 86_400, "2 yr ago")]
     public void RelativeTimeBoundaries(long secondsAgo, string expected)

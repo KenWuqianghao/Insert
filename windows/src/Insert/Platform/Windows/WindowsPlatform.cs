@@ -56,17 +56,24 @@ public sealed unsafe class WindowsPlatform : IPlatform, IWindowService, ILoginIt
     private static nint WindowProc(nint hwnd, uint message, nint wParam, nint lParam)
     {
         var platform = s_current;
-        switch (message)
+        try
         {
-            case WM_CLIPBOARDUPDATE when platform is not null:
-                platform.ClipboardService.OnClipboardUpdate();
-                return 0;
-            case WM_HOTKEY when platform is not null:
-                platform.KeyboardService.OnHotkey();
-                return 0;
-            default:
-                return DefWindowProcW(hwnd, message, wParam, lParam);
+            switch (message)
+            {
+                case WM_CLIPBOARDUPDATE when platform is not null:
+                    platform.ClipboardService.OnClipboardUpdate();
+                    return 0;
+                case WM_HOTKEY when platform is not null:
+                    platform.KeyboardService.OnHotkey();
+                    return 0;
+            }
         }
+        catch (Exception error)
+        {
+            // An exception that leaves an UnmanagedCallersOnly method ends the process.
+            Services.Log.Info($"window: message {message:X} error {error}");
+        }
+        return DefWindowProcW(hwnd, message, wParam, lParam);
     }
 
     public PixelPoint Pointer => GetCursorPos(out var point) ? new PixelPoint(point.X, point.Y) : default;

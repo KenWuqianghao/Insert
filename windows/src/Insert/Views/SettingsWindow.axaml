@@ -161,6 +161,7 @@
               </StackPanel>
               <Button Grid.Column="1" Content="Add App…" VerticalAlignment="Center" Margin="12,0,0,0" Click="AddIgnoredApp" />
             </Grid>
+            <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
             <ItemsControl ItemsSource="{Binding IgnoredApps}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="v:IgnoredAppRow">
@@ -178,6 +179,7 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
+            </ScrollViewer>
           </StackPanel>
         </Border>
         <TextBlock Classes="detail" Margin="4,0"

@@ -72,7 +72,7 @@ dotnet build windows/src/Insert
 dotnet test windows/tests/Insert.Core.Tests
 ```
 
-To make the release archives, run `windows/tools/publish.sh`. It writes `Insert-<version>-win-x64.zip` and `Insert-<version>-win-arm64.zip` to `windows/dist/`. Each archive contains one self-contained `Insert.exe`.
+To make the release archives, run `windows/tools/publish.sh`. It writes `Insert-<version>-win-x64.zip` and `Insert-<version>-win-arm64.zip` to `windows/dist/`. Each archive contains one self-contained `Insert.exe`. The script also needs Bash and `zip`. On Windows, run it in Git Bash or WSL.
 
 ### Run the app on Linux or macOS
 

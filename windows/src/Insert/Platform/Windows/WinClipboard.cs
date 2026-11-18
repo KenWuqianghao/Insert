@@ -52,9 +52,10 @@ internal sealed unsafe class WinClipboard : IClipboardService, IDisposable
                 if (total > ClipCapture.MaxByteCount) return null;
                 representations.Add(new Representation(name, data));
             }
-            // A DIB and a DIBV5 are two forms of the same picture. Windows makes the second from the first.
-            if (representations.Any(r => r.Format == ClipFormats.Dib))
-                representations.RemoveAll(r => r.Format == ClipFormats.DibV5);
+            // A DIB and a DIBV5 are two forms of one picture. When an app gives one, Windows makes the other.
+            // Only the DIBV5 can keep an alpha channel.
+            if (representations.Any(r => r.Format == ClipFormats.DibV5))
+                representations.RemoveAll(r => r.Format == ClipFormats.Dib);
             return representations.Count == 0 ? null : new ClipPayload(representations);
         }
         finally
@@ -69,24 +70,25 @@ internal sealed unsafe class WinClipboard : IClipboardService, IDisposable
         try
         {
             EmptyClipboard();
+            var isComplete = true;
             foreach (var representation in payload.Representations)
             {
                 var format = FormatId(representation.Format);
                 var data = Denormalize(representation.Format, representation.Data);
-                SetData(format, data);
+                isComplete &= SetData(format, data);
             }
             if (payload.Has(ClipFormats.FileDrop))
             {
                 // File Explorer reads this format to copy the files, not move them.
-                SetData(RegisterClipboardFormatW("Preferred DropEffect"), BitConverter.GetBytes(1));
+                isComplete &= SetData(RegisterClipboardFormatW("Preferred DropEffect"), BitConverter.GetBytes(1));
             }
+            return isComplete;
         }
         finally
         {
             CloseClipboard();
             _ownSequence = GetClipboardSequenceNumber();
         }
-        return true;
     }
 
     /// <summary>Another app can have the clipboard open for a short time.</summary>
@@ -141,14 +143,22 @@ internal sealed unsafe class WinClipboard : IClipboardService, IDisposable
         }
     }
 
-    private static void SetData(uint format, byte[] data)
+    private static bool SetData(uint format, byte[] data)
     {
+        if (format == 0) return false;
         var handle = GlobalAlloc(GMEM_MOVEABLE, (nuint)Math.Max(data.Length, 1));
-        if (handle == 0) return;
+        if (handle == 0) return false;
         var pointer = GlobalLock(handle);
+        if (pointer is null)
+        {
+            GlobalFree(handle);
+            return false;
+        }
         data.CopyTo(new Span<byte>(pointer, data.Length));
         GlobalUnlock(handle);
-        if (SetClipboardData(format, handle) == 0) GlobalFree(handle);
+        if (SetClipboardData(format, handle) != 0) return true;
+        GlobalFree(handle);
+        return false;
     }
 
     /// <summary>Text formats lose the null at the end. A file drop becomes UTF-8 lines.</summary>

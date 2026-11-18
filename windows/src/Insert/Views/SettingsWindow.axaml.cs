@@ -15,9 +15,11 @@ public sealed partial class SettingsWindow : Window
         Deactivated += (_, _) => StopRecording();
         Closing += (_, e) =>
         {
-            // The window opens again with the same state, so it only hides.
-            e.Cancel = true;
             StopRecording();
+            // A shutdown or a sign-out must close the window. A close by the user only hides it,
+            // so that it opens again with the same state.
+            if (e.CloseReason != WindowCloseReason.WindowClosing) return;
+            e.Cancel = true;
             Hide();
         };
     }
@@ -70,17 +72,24 @@ public sealed partial class SettingsWindow : Window
 
     private async void AddIgnoredApp(object? sender, RoutedEventArgs e)
     {
-        var start = await StorageProvider.TryGetFolderFromPathAsync(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        try
         {
-            Title = "Ignore Apps",
-            AllowMultiple = true,
-            SuggestedStartLocation = start,
-            FileTypeFilter = [new FilePickerFileType("Apps") { Patterns = ["*.exe"] }],
-        });
-        foreach (var file in files)
+            var start = await StorageProvider.TryGetFolderFromPathAsync(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Ignore Apps",
+                AllowMultiple = true,
+                SuggestedStartLocation = start,
+                FileTypeFilter = [new FilePickerFileType("Apps") { Patterns = ["*.exe"] }],
+            });
+            foreach (var file in files)
+            {
+                if (file.TryGetLocalPath() is { } path) ViewModel?.AddIgnoredApp(path);
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
         {
-            if (file.TryGetLocalPath() is { } path) ViewModel?.AddIgnoredApp(path);
+            Services.Log.Info($"settings: could not add an ignored app: {error.Message}");
         }
     }
 

@@ -119,12 +119,16 @@ public sealed class HoldTriggerTests
     }
 
     [Fact]
-    public void MouseButtonDownOrOwnWindowActiveBlocksTheStart()
+    public void MouseButtonOrOtherKeyDownOrOwnWindowActiveBlocksTheStart()
     {
         _host.AnyMouseButtonDown = true;
         Press(ModifierKeys.Alt);
         Press(ModifierKeys.None);
         _host.AnyMouseButtonDown = false;
+        _host.OtherKeyIsDown = true;
+        Press(ModifierKeys.Alt);
+        Press(ModifierKeys.None);
+        _host.OtherKeyIsDown = false;
         _host.OwnWindowIsActive = true;
         Press(ModifierKeys.Alt);
 

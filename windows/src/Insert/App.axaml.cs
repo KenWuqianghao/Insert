@@ -124,6 +124,8 @@ public sealed partial class App : Application
     }
 
     private Hotkey? _registered;
+    /// <summary>The last shortcut that registered. It stays in use when a new shortcut is used by another app.</summary>
+    private Hotkey? _working;
 
     private void RegisterHotkey()
     {
@@ -131,6 +133,8 @@ public sealed partial class App : Application
         if (hotkey == _registered) return;
         _registered = hotkey;
         _hotkeyIsUnavailable = !_platform.Keyboard.RegisterHotkey(hotkey);
+        if (!_hotkeyIsUnavailable) _working = hotkey;
+        else if (_working is { } previous) _platform.Keyboard.RegisterHotkey(previous);
         _settingsModel.HotkeyIsUnavailable = _hotkeyIsUnavailable;
         Log.Info($"hotkey: {hotkey.DisplayName} {(_hotkeyIsUnavailable ? "is used by another app" : "registered")}");
     }

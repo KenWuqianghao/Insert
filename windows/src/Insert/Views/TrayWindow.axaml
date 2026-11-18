@@ -83,7 +83,7 @@
       </ContentControl>
 
       <!-- Top bar -->
-      <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" Margin="22,6,22,0">
+      <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" Margin="22,6,22,0">
         <Border Width="240" Height="30" CornerRadius="8" Background="{DynamicResource Fill08}" VerticalAlignment="Center">
           <Grid ColumnDefinitions="Auto,*,Auto" Margin="10,0,6,0">
             <PathIcon Data="{StaticResource Icon.Search}" Width="14" Height="14" />

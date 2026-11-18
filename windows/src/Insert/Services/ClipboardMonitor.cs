@@ -29,7 +29,15 @@ public sealed class ClipboardMonitor(IPlatform platform, ClipLibrary library, Pr
             Log.Info($"capture: skipped, no card for formats {string.Join(", ", payload.Representations.Select(r => r.Format))}");
             return;
         }
-        library.Insert(capture);
+        try
+        {
+            library.Insert(capture);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            Log.Info($"capture: skipped, the clip could not be saved: {error.Message}");
+            return;
+        }
         Log.Info($"capture: {capture.Clip.Kind} from {source?.Name ?? "unknown app"}, formats {string.Join(", ", payload.Representations.Select(r => r.Format))}");
     }
 }

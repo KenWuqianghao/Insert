@@ -29,9 +29,7 @@ public sealed partial class CardViewModel : ObservableObject
     {
         _icons = icons;
         Clip = clip;
-        var app = icons.For(clip.Source);
-        AppIcon = app.Icon;
-        HeaderBrush = new SolidColorBrush(app.Tint);
+        SetSource(clip.Source);
         KindGlyph = Palette.KindIcon(clip.Kind);
         Body = MakeBody(clip, thumbnail);
         Title = clip.CustomTitle ?? clip.Kind.Name();
@@ -40,9 +38,14 @@ public sealed partial class CardViewModel : ObservableObject
     }
 
     public Clip Clip { get; private set; }
-    public Bitmap? AppIcon { get; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAppIcon))]
+    public partial Bitmap? AppIcon { get; private set; }
+
     public bool HasAppIcon => AppIcon is not null;
-    public IBrush HeaderBrush { get; }
+
+    [ObservableProperty]
+    public partial IBrush HeaderBrush { get; private set; }
     public Geometry? KindGlyph { get; }
     public CardBody Body { get; }
 
@@ -79,14 +82,22 @@ public sealed partial class CardViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectionOpacity));
     }
 
-    /// <summary>A clip with the same id can change its title, time, or pinboard.</summary>
+    /// <summary>A clip with the same id can change its title, time, pinboard, or source app.</summary>
     public void Update(Clip clip, Pinboard? pinboard)
     {
+        if (clip.Source != Clip.Source) SetSource(clip.Source);
         Clip = clip;
         Title = clip.CustomTitle ?? clip.Kind.Name();
         Footer = clip.FooterText;
         PinBrush = pinboard is null ? null : Palette.PinboardBrush(pinboard.Color);
         RefreshTime(DateTimeOffset.Now);
+    }
+
+    private void SetSource(SourceApp? source)
+    {
+        var app = _icons.For(source);
+        AppIcon = app.Icon;
+        HeaderBrush = new SolidColorBrush(app.Tint);
     }
 
     public void RefreshTime(DateTimeOffset now)

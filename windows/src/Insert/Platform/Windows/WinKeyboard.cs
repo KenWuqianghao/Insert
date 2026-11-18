@@ -52,25 +52,36 @@ internal sealed class WinKeyboard : IKeyboardService, IDisposable
 
     public IHoldTriggerHost CreateTriggerHost(Func<bool> open, Action release) => new TriggerHost(open, release);
 
+    // An exception that leaves an UnmanagedCallersOnly method ends the process, so the hooks catch all of them.
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
     private static unsafe nint KeyboardProc(int code, nint wParam, nint lParam)
     {
-        var self = s_current;
-        if (code >= 0 && self is not null && self.OnKey((int)wParam, (KBDLLHOOKSTRUCT*)lParam)) return 1;
+        try
+        {
+            var self = s_current;
+            if (code >= 0 && self is not null && self.OnKey((int)wParam, (KBDLLHOOKSTRUCT*)lParam)) return 1;
+        }
+        catch (Exception error)
+        {
+            Services.Log.Info($"keyboard: hook error {error}");
+        }
         return CallNextHookEx(0, code, wParam, lParam);
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
     private static nint MouseProc(int code, nint wParam, nint lParam)
     {
-        if (code >= 0 && s_current?._trigger is { } trigger)
+        try
         {
-            switch ((int)wParam)
+            if (code >= 0 && s_current?._trigger is { } trigger
+                && (int)wParam is WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN or WM_XBUTTONDOWN or WM_MOUSEWHEEL or WM_MOUSEHWHEEL)
             {
-                case WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN or WM_XBUTTONDOWN or WM_MOUSEWHEEL or WM_MOUSEHWHEEL:
-                    trigger.Interrupted();
-                    break;
+                trigger.Interrupted();
             }
+        }
+        catch (Exception error)
+        {
+            Services.Log.Info($"mouse: hook error {error}");
         }
         return CallNextHookEx(0, code, wParam, lParam);
     }

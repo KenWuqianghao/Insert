@@ -101,7 +101,8 @@ public sealed partial class TrayViewModel : ObservableObject
         var library = Model.Library;
         var visible = Model.VisibleClips;
 
-        foreach (var id in _cards.Keys.Where(id => library.Clips.All(clip => clip.Id != id)).ToList())
+        var live = library.Clips.Select(clip => clip.Id).ToHashSet();
+        foreach (var id in _cards.Keys.Where(id => !live.Contains(id)).ToList())
         {
             _cards.Remove(id);
             _thumbnails.Remove(id);
@@ -132,7 +133,7 @@ public sealed partial class TrayViewModel : ObservableObject
 
         var primary = Model.PrimaryClip;
         Preview = IsPreviewing && primary is not null
-            ? Preview?.Clip.Id == primary.Id ? Preview : new PreviewViewModel(primary, Model.Library, _icons, Thumbnail(primary.Id))
+            ? Preview?.Clip == primary ? Preview : new PreviewViewModel(primary, Model.Library, _icons, Thumbnail(primary.Id))
             : null;
 
         OnPropertyChanged(nameof(Query));

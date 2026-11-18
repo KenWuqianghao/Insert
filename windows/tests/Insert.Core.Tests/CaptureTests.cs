@@ -222,7 +222,7 @@ public sealed class CaptureTests
     }
 
     [Fact]
-    public void PlainTextFallsBackFromTextToFilesToUrl()
+    public void PlainTextFallsBackFromTextToFilesToUrlToRichText()
     {
         var text = Utf16(ClipFormats.UnicodeText, "text");
         var files = Utf8(ClipFormats.FileDrop, "C:\\a\nC:\\b");
@@ -231,6 +231,11 @@ public sealed class CaptureTests
         Assert.Equal("text", new ClipPayload([url, files, text]).PlainText);
         Assert.Equal("C:\\a\r\nC:\\b", new ClipPayload([url, files]).PlainText);
         Assert.Equal("https://example.com", new ClipPayload([url]).PlainText);
-        Assert.Null(new ClipPayload([Utf8(ClipFormats.Html, "<b>x</b>")]).PlainText);
+        var rtf = Utf8(ClipFormats.Rtf, @"{\rtf1\ansi {\b Bold} text}");
+        var html = Utf8(ClipFormats.Html, "<b>Hello</b>");
+        Assert.Equal("https://example.com", new ClipPayload([rtf, url]).PlainText);
+        Assert.Equal("Bold text", new ClipPayload([html, rtf]).PlainText);
+        Assert.Equal("Hello", new ClipPayload([html]).PlainText);
+        Assert.Null(new ClipPayload([Utf8(ClipFormats.Png, "x")]).PlainText);
     }
 }

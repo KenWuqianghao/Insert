@@ -58,7 +58,7 @@ public sealed class HoldTrigger(IHoldTriggerHost host)
         {
             case HoldState.Idle:
                 var isLonePress = wasEmpty && held == Modifier.Key();
-                if (isLonePress && !host.AnyMouseButtonDown && !host.OwnWindowIsActive) StartWaiting();
+                if (isLonePress && !host.AnyMouseButtonDown && !host.OtherKeyIsDown && !host.OwnWindowIsActive) StartWaiting();
                 break;
             case HoldState.Waiting:
                 if (held != Modifier.Key()) CancelWait();

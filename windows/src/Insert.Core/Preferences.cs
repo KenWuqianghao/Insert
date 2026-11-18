@@ -110,6 +110,7 @@ public sealed record PreferencesData
     public PreferencesData Normalized() => this with
     {
         Hotkey = Hotkey is { IsValid: true } ? Hotkey : Hotkey.Default,
+        RingModifier = Enum.IsDefined(RingModifier) ? RingModifier : RingModifier.Alt,
         HistoryLimit = ClipLibrary.HistoryLimitOptions.Contains(HistoryLimit) ? HistoryLimit : ClipLibrary.DefaultHistoryLimit,
         IgnoredApps = IgnoredApps ?? [],
     };
@@ -141,7 +142,10 @@ public sealed class PreferencesStore(string path)
     }
 }
 
-/// <summary>The settings that the app uses. Each change saves the file and raises <see cref="Changed"/>.</summary>
+/// <summary>
+/// The settings that the app uses. Each change saves the file and raises <see cref="Changed"/>.
+/// If the file cannot be written, the change applies until the app stops.
+/// </summary>
 public sealed class Preferences(PreferencesStore store)
 {
     private PreferencesData _data = store.Load();
@@ -155,7 +159,13 @@ public sealed class Preferences(PreferencesStore store)
         var next = change(_data).Normalized();
         if (next == _data) return;
         _data = next;
-        store.Save(next);
+        try
+        {
+            store.Save(next);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+        }
         Changed?.Invoke(next);
     }
 }

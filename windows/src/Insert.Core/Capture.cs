@@ -81,7 +81,9 @@ public sealed class ClipPayload(IReadOnlyList<Representation> representations)
             if (Text is { } text) return text;
             var paths = FilePaths;
             if (paths.Count > 0) return string.Join("\r\n", paths);
-            return Url;
+            if (Url is { } url) return url;
+            if (Get(ClipFormats.Rtf) is { } rtf) return ClipCapture.RtfText(rtf);
+            return Html is { } html ? ClipCapture.HtmlText(html) : null;
         }
     }
 

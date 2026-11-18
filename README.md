@@ -177,7 +177,7 @@ dotnet test windows/tests/Insert.Core.Tests
 windows/tools/publish.sh
 ```
 
-`publish.sh` writes one zip for each of `win-x64` and `win-arm64` to `windows/dist/`. Each zip contains one self-contained `Insert.exe`.
+`publish.sh` writes one zip for each of `win-x64` and `win-arm64` to `windows/dist/`. Each zip contains one self-contained `Insert.exe`. The script also needs Bash and `zip`. On Windows, run it in Git Bash or WSL.
 
 ### Storage on Windows
 

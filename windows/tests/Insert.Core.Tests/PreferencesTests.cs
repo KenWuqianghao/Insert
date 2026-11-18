@@ -62,11 +62,12 @@ public sealed class PreferencesTests : IDisposable
     public void OutOfRangeValuesNormalizeToDefaults()
     {
         Directory.CreateDirectory(_dir.File("settings"));
-        File.WriteAllText(Store.Path, """{ "hotkey": { "modifiers": "None", "key": 86 }, "historyLimit": 7, "ignoredApps": null }""");
+        File.WriteAllText(Store.Path, """{ "hotkey": { "modifiers": "None", "key": 86 }, "ringModifier": 99, "historyLimit": 7, "ignoredApps": null }""");
 
         var loaded = Store.Load();
 
         Assert.Equal(Hotkey.Default, loaded.Hotkey);
+        Assert.Equal(RingModifier.Alt, loaded.RingModifier);
         Assert.Equal(ClipLibrary.DefaultHistoryLimit, loaded.HistoryLimit);
         Assert.Empty(loaded.IgnoredApps);
         Assert.Equal(Hotkey.Default, new PreferencesData { Hotkey = new Hotkey(ModifierKeys.Control, 0xFF) }.Normalized().Hotkey);
