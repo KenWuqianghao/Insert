@@ -108,10 +108,10 @@ To see the download counts of each release, run `Tools/downloads.sh`. It reads t
 | Action | Shortcut |
 | --- | --- |
 | Open the ring at the pointer | Hold `Option` alone. You can select `Command` or `Control` in Settings. |
-| Paste a clip | Point at the clip, then release the key. Or release the key first, then click the clip. |
+| Paste a clip | Point at the clip, then release the key. Or click the clip while you hold the key. |
 | Paste clip 1 to 8 | `1` to `8` |
 | Paste the selected clip | `Enter` |
-| Close the ring | `Esc`, a click outside the ring, or any other key |
+| Close the ring | Release the key with no clip selected, `Esc`, a click outside the ring, or any other key |
 
 Right-click a card to pin, rename, preview, or delete the clip. Right-click a pinboard tab to rename it, change its color, or delete it.
 
