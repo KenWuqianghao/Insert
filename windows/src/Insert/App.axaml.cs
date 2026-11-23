@@ -201,6 +201,9 @@ public sealed partial class App : Application
             case "pointer" when _platform is FakePlatform fake && argument.Split(',') is [var x, var y]:
                 fake.Pointer = new PixelPoint(int.Parse(x), int.Parse(y));
                 break;
+            case "release" when _platform is FakePlatform:
+                _ring.EndHold();
+                break;
         }
     }
 

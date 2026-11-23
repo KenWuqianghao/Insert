@@ -46,7 +46,7 @@ Right-click a clip to paste it, pin it to a pinboard, rename it, or delete it. R
 2. Move the pointer onto a clip. A preview of the clip shows next to the ring.
 3. Release `Alt`. Insert pastes that clip into the app in front.
 
-If you release `Alt` while the pointer is in the center of the ring, the ring stays open. Then click a clip, or its preview, to paste it. Press `Esc` or click outside the ring to close it. `1` to `8` paste a clip by its position.
+If you release `Alt` while the pointer is in the center of the ring, the ring closes. While you hold `Alt`, you can also click a clip, or its preview, to paste it. Press `Esc` or click outside the ring to close it. `1` to `8` paste a clip by its position.
 
 To use `Ctrl` or the Windows key in place of `Alt`, change **Hold to open the clip ring** in Settings. The ring does not open while the menu of another app is open, or when you press another key or a mouse button during the hold.
 
@@ -87,9 +87,10 @@ dotnet run --project windows/src/Insert -- --data /tmp/insert-demo --show
 
 | Option | Result |
 | --- | --- |
-| `--ring [n]` | Open the clip ring, and select segment `n`. |
+| `--ring [n]` | Open the clip ring, and move the pointer onto segment `n`. |
 | `--copy <text>` | Put the text on the fake clipboard. Insert saves it as a clip. |
 | `--pointer x,y` | Move the fake pointer, in screen pixels. |
+| `--release` | Release the fake hold key. The ring pastes the clip under the pointer, or closes. |
 
 ## Storage
 

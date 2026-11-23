@@ -387,14 +387,14 @@ impl App {
         }
     }
 
-    /// Pastes the selected clip when the user also releases the modifier keys. With no selection, the ring stays
-    /// open, as on macOS: a click on a clip pastes it, and `Esc` or a click outside the band closes the ring.
+    /// Pastes the clip under the pointer when the user also releases the modifier keys. With no clip under the
+    /// pointer, closes the ring.
     pub fn release_ring(self: &Rc<Self>) {
+        if let Some(at) = pointer_position(&self.ring.window) {
+            self.point_ring(at);
+        }
         let selected = match &*self.ring.state.borrow() {
-            RingState::Open(ring) => match ring.selected_clip() {
-                Some(id) => Some(id),
-                None => return,
-            },
+            RingState::Open(ring) => ring.selected_clip(),
             RingState::Releasing(_) => return,
             RingState::Hidden | RingState::Placing => None,
         };

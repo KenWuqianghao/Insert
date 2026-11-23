@@ -51,7 +51,7 @@ The clip ring shows your 8 newest clips around the pointer. Each segment shows t
 2. Move the pointer toward a clip. The segment of the clip becomes lighter, and a preview of the clip appears.
 3. Release the keys. Insert pastes the clip into the app in front.
 
-If you release the keys while the pointer is in the center, the ring stays open. Click a clip to paste it. To close the ring with no paste, press `Esc` or click outside the ring.
+If you release the keys while the pointer is in the center, the ring closes with no paste. While you hold the keys, you can also click a clip to paste it. To close the ring with no paste, press `Esc` or click outside the ring.
 
 To change the shortcut, open Settings and click **Change…** in the row "Hold to open the clip ring".
 

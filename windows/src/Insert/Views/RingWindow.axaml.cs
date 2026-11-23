@@ -29,6 +29,7 @@ public sealed partial class RingWindow : Window
     private readonly Func<Guid, Avalonia.Media.Imaging.Bitmap?> _thumbnail;
     private IReadOnlyList<Clip> _clips = [];
     private Presentation _presentation = Presentation.Hidden;
+    private PixelPoint _origin;
     private double _scaling = 1;
 
     public RingWindow()
@@ -68,13 +69,13 @@ public sealed partial class RingWindow : Window
         var screen = Screens.ScreenFromPoint(pointer) ?? Screens.Primary;
         if (screen is null) return false;
         var work = screen.WorkingArea;
+        _origin = work.Position;
         _scaling = screen.Scaling;
 
         var bounds = new Rect2(0, 0, work.Width / _scaling, work.Height / _scaling);
-        var local = new Point2((pointer.X - work.X) / _scaling, (pointer.Y - work.Y) / _scaling);
+        var local = ToWindow(pointer);
         var center = _layout.Present(_clips.Count, local, bounds);
-        if (center.DistanceTo(local) > 0.5)
-            _platform.Windows.MovePointer(new PixelPoint(work.X + (int)Math.Round(center.X * _scaling), work.Y + (int)Math.Round(center.Y * _scaling)));
+        if (center.DistanceTo(local) > 0.5) _platform.Windows.MovePointer(ToScreen(center));
 
         var now = DateTimeOffset.Now;
         Ring.Items = _clips.Select(clip =>
@@ -99,19 +100,28 @@ public sealed partial class RingWindow : Window
         return true;
     }
 
-    /// <summary>The user released the modifier. With a selected segment, the ring pastes it. Without one, the ring stays open for a click.</summary>
+    /// <summary>
+    /// The user released the modifier. The ring pastes the segment under the pointer, or closes when there is none.
+    /// The keyboard hook can report the release before the last pointer move reaches the window, so the ring reads the pointer first.
+    /// </summary>
     public void EndHold()
     {
-        if (IsShown && _layout.Selection is { } index) Paste(index);
+        if (!IsShown) return;
+        var pointer = ToWindow(_platform.Windows.Pointer);
+        Track(new Point(pointer.X, pointer.Y));
+        if (_layout.Selection is { } index) Paste(index);
+        else HideRing();
     }
 
-    /// <summary>Selects a segment, for tests and screenshots.</summary>
+    /// <summary>Moves the pointer onto a segment, for tests and screenshots.</summary>
     public void Select(int index)
     {
         if (!IsShown || index < 0 || index >= _clips.Count) return;
         var angle = RingGeometry.Direction(index, _clips.Count);
         var reach = (RingGeometry.InnerRadius + RingGeometry.OuterRadius) / 2;
-        Track(new Point(_layout.Center.X + Math.Cos(angle) * reach, _layout.Center.Y + Math.Sin(angle) * reach));
+        var point = new Point2(_layout.Center.X + Math.Cos(angle) * reach, _layout.Center.Y + Math.Sin(angle) * reach);
+        _platform.Windows.MovePointer(ToScreen(point));
+        Track(new Point(point.X, point.Y));
     }
 
     public void HideRing(Action? then = null)
@@ -178,6 +188,11 @@ public sealed partial class RingWindow : Window
             PreviewCard.Opacity = 0;
         }
     }
+
+    /// <summary>Converts physical screen pixels to window coordinates.</summary>
+    private Point2 ToWindow(PixelPoint point) => new((point.X - _origin.X) / _scaling, (point.Y - _origin.Y) / _scaling);
+
+    private PixelPoint ToScreen(Point2 point) => new(_origin.X + (int)Math.Round(point.X * _scaling), _origin.Y + (int)Math.Round(point.Y * _scaling));
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
