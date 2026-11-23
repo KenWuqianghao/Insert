@@ -13,7 +13,7 @@ public sealed record Options(string DataRoot, string Command, bool Demo)
         Commands for the running copy of Insert:
           --show            Open the tray. A second start without a command also opens the tray.
           --toggle          Open or close the tray.
-          --ring [<n>]      Open the clip ring at the pointer, and select segment n.
+          --ring [<n>]      Open the clip ring at the pointer, and move the pointer onto segment n.
           --settings        Open Settings.
           --quit            Quit Insert.
           --background      Start without a window. Launch at login uses this.
@@ -21,6 +21,7 @@ public sealed record Options(string DataRoot, string Command, bool Demo)
         Commands for tests on a system without Win32:
           --copy <text>     Put text on the fake clipboard as a copy from another app.
           --pointer <x,y>   Move the fake pointer, in physical pixels.
+          --release         Release the fake hold key of the clip ring.
 
         --data <folder>     Keep clips and settings in this folder. The default is %LOCALAPPDATA%\Insert.
         --demo              Add sample clips when the library is empty.
@@ -41,7 +42,7 @@ public sealed record Options(string DataRoot, string Command, bool Demo)
                 case "--demo":
                     demo = true;
                     break;
-                case "--show" or "--toggle" or "--settings" or "--quit" or "--background":
+                case "--show" or "--toggle" or "--settings" or "--quit" or "--background" or "--release":
                     command = args[index][2..];
                     break;
                 case "--ring":
