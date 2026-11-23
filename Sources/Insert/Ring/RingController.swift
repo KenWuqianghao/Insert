@@ -132,8 +132,12 @@ final class RingController: NSObject, NSWindowDelegate {
     }
 
     func endHold() {
-        if isShown, let index = model.selection {
+        guard isShown else { return }
+        model.track(Self.ringPoint(of: NSEvent.mouseLocation, on: panel.frame))
+        if let index = model.selection {
             paste(index)
+        } else {
+            hide()
         }
     }
 
@@ -149,7 +153,7 @@ final class RingController: NSObject, NSWindowDelegate {
 
         let frame = screen.frame
         let visible = screen.visibleFrame
-        let pointer = CGPoint(x: mouse.x - frame.minX, y: frame.maxY - mouse.y)
+        let pointer = Self.ringPoint(of: mouse, on: frame)
         let center = model.present(
             clips,
             pointer: pointer,
@@ -192,6 +196,11 @@ final class RingController: NSObject, NSWindowDelegate {
         if isShown {
             model.track(point)
         }
+    }
+
+    /// Converts a point in AppKit screen coordinates to the coordinates of the ring view on the screen with `frame`.
+    private static func ringPoint(of point: CGPoint, on frame: CGRect) -> CGPoint {
+        CGPoint(x: point.x - frame.minX, y: frame.maxY - point.y)
     }
 
     /// `point` uses the coordinates of the ring view on `screen`.
